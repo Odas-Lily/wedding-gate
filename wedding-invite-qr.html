@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Invite Gate — Wedding QR Check-in</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{
+    --ink:#2e2440; --ink-soft:#6b5f82;
+    --lavender:#7c6aae; --lavender-deep:#5d4b91; --lavender-mist:#ece7f6;
+    --blush:#e8afc0; --peach:#f0b995;
+    --ground:#f6f3fa; --card:#ffffff;
+    --ok:#3e8e5a; --ok-bg:#e4f3ea;
+    --warn:#b3801f; --warn-bg:#faf0d8;
+    --bad:#b23a48; --bad-bg:#f9e4e7;
+    --radius:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--ground);color:var(--ink);
+    display:flex;flex-direction:column;max-width:520px;margin:0 auto;min-height:100dvh;
+  }
+  header{
+    padding:16px 18px 12px;
+    background:linear-gradient(160deg,var(--lavender-mist) 0%,#fdf6f0 100%);
+    border-bottom:1px solid #e5def2;
+  }
+  .head-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  .monogram h1{font-family:Georgia,serif;font-weight:400;font-size:24px;letter-spacing:.5px}
+  .monogram h1 em{font-style:italic;color:var(--lavender-deep)}
+  .event-sub{font-size:12px;color:var(--ink-soft);margin-top:2px;letter-spacing:.3px}
+  .badges{display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+  .net,.role{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:4px 10px;border-radius:99px;white-space:nowrap}
+  .net.on{background:var(--ok-bg);color:var(--ok)}
+  .net.off{background:var(--warn-bg);color:var(--warn)}
+  .role.usher{background:#f1edf9;color:var(--ink-soft)}
+  .role.org{background:var(--lavender-mist);color:var(--lavender-deep)}
+  .stats{display:flex;gap:8px;margin-top:11px}
+  .stat{flex:1;background:rgba(255,255,255,.75);border:1px solid #e8e1f4;border-radius:12px;padding:7px 8px;text-align:center}
+  .stat b{display:block;font-size:18px;font-family:Georgia,serif;color:var(--lavender-deep)}
+  .stat span{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--ink-soft)}
+
+  main{flex:1;overflow-y:auto;padding:16px 16px 92px}
+  .panel{display:none}
+  .panel.active{display:block}
+  h2.section{font-family:Georgia,serif;font-weight:400;font-size:19px;margin:6px 2px 12px}
+  .hint{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin:0 2px 14px}
+
+  .field{margin-bottom:10px}
+  .field label{display:block;font-size:11.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--ink-soft);margin:0 2px 5px}
+  input[type=text],input[type=number],input[type=password]{
+    width:100%;padding:13px 14px;font-size:16px;border:1.5px solid #ddd4ee;
+    border-radius:12px;background:#fff;color:var(--ink);outline:none;
+  }
+  input:focus{border-color:var(--lavender)}
+  .row{display:flex;gap:8px}
+  .row .grow{flex:1}
+  .row .narrow{width:100px}
+  button{font-size:15px;font-weight:600;border:none;border-radius:12px;padding:13px 18px;cursor:pointer;transition:transform .06s}
+  button:active{transform:scale(.97)}
+  button:focus-visible{outline:3px solid var(--blush);outline-offset:2px}
+  .btn-primary{background:var(--lavender);color:#fff;width:100%}
+  .btn-quiet{background:var(--lavender-mist);color:var(--lavender-deep)}
+  .btn-danger{background:var(--bad-bg);color:var(--bad)}
+  .btn-ghost{background:transparent;color:var(--ink-soft);font-weight:500;font-size:13px;padding:8px 10px}
+
+  .guest{background:var(--card);border:1px solid #eae4f5;border-radius:var(--radius);padding:12px 13px;margin-bottom:9px;display:flex;align-items:center;gap:11px}
+  .guest .avatar{width:38px;height:38px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-size:16px;color:#fff}
+  .guest .info{flex:1;min-width:0}
+  .guest .info b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .guest .info small{font-size:12px;color:var(--ink-soft)}
+  .pill{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;padding:4px 9px;border-radius:99px;flex-shrink:0}
+  .pill.in{background:var(--ok-bg);color:var(--ok)}
+  .pill.out{background:#f1edf9;color:var(--ink-soft)}
+  .guest-actions{display:flex;flex-shrink:0}
+  .icon-btn{background:none;border:none;padding:8px 7px;font-size:17px;cursor:pointer;color:var(--lavender-deep)}
+  .empty{text-align:center;padding:42px 20px;color:var(--ink-soft);font-size:14px;line-height:1.6}
+  .empty .big{font-size:34px;margin-bottom:8px}
+  .list-tools{display:flex;gap:8px;margin:14px 0 10px}
+  .list-tools button{flex:1;font-size:13px;padding:10px 8px}
+
+  /* lock screen */
+  .lock{
+    text-align:center;padding:36px 20px;background:var(--card);
+    border:1px solid #eae4f5;border-radius:var(--radius);
+  }
+  .lock .big{font-size:32px;margin-bottom:10px}
+  .lock p{font-size:13px;color:var(--ink-soft);line-height:1.6;margin-bottom:16px}
+  .lock input{text-align:center;margin-bottom:10px}
+
+  .overlay{position:fixed;inset:0;background:rgba(46,36,64,.55);z-index:40;display:none;align-items:flex-end;justify-content:center}
+  .overlay.show{display:flex}
+  .sheet{background:var(--ground);width:100%;max-width:520px;border-radius:22px 22px 0 0;padding:18px 18px 26px;max-height:88dvh;overflow-y:auto}
+  .sheet-handle{width:42px;height:4px;border-radius:4px;background:#cfc6e3;margin:0 auto 14px}
+  .ticket{background:#fff;border-radius:18px;overflow:hidden;border:1px solid #e6dff3;box-shadow:0 8px 30px rgba(93,75,145,.14)}
+  .ticket-top{background:linear-gradient(135deg,var(--lavender) 0%,var(--lavender-deep) 60%,#7d5a8f 100%);color:#fff;text-align:center;padding:17px 16px 13px}
+  .ticket-top .serif{font-family:Georgia,serif;font-size:20px}
+  .ticket-top small{display:block;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;opacity:.85;margin-top:4px}
+  .ticket-perf{height:0;border-top:2px dashed #ddd4ee;position:relative}
+  .ticket-perf::before,.ticket-perf::after{content:"";position:absolute;top:-9px;width:18px;height:18px;border-radius:50%;background:var(--ground)}
+  .ticket-perf::before{left:-10px}.ticket-perf::after{right:-10px}
+  .ticket-body{padding:18px 16px;text-align:center}
+  .qr-holder{display:flex;justify-content:center;margin:4px 0 12px}
+  .ticket-name{font-family:Georgia,serif;font-size:21px}
+  .ticket-meta{font-size:12.5px;color:var(--ink-soft);margin-top:4px}
+  .ticket-code{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#a79bc4;margin-top:10px;letter-spacing:.5px;word-break:break-all}
+  .sheet-actions{display:flex;gap:8px;margin-top:14px}
+  .sheet-actions button{flex:1}
+
+  #reader{border-radius:var(--radius);overflow:hidden;background:#161221;min-height:60px}
+  #reader video{border-radius:var(--radius)}
+  .scan-result{border-radius:var(--radius);padding:22px 16px;text-align:center;margin-top:12px;display:none}
+  .scan-result.show{display:block}
+  .scan-result .verdict{font-size:24px;font-weight:800;letter-spacing:.5px}
+  .scan-result .who{font-family:Georgia,serif;font-size:20px;margin-top:6px}
+  .scan-result .detail{font-size:13px;margin-top:6px;opacity:.85;line-height:1.5}
+  .scan-result.ok{background:var(--ok-bg);color:var(--ok)}
+  .scan-result.dup{background:var(--warn-bg);color:var(--warn)}
+  .scan-result.bad{background:var(--bad-bg);color:var(--bad)}
+  .scan-tools{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .scan-tools button{flex:1;min-width:130px}
+  .cam-note{font-size:12px;color:var(--ink-soft);margin-top:10px;line-height:1.5;text-align:center}
+  .pending-badge{display:none;margin-top:10px;text-align:center;font-size:12.5px;background:var(--warn-bg);color:var(--warn);padding:9px 12px;border-radius:12px}
+  .pending-badge.show{display:block}
+  .lookup{margin-top:20px}
+  #lookupResults .guest{padding:10px 12px}
+  .admit-btn{background:var(--ok-bg);color:var(--ok);font-size:12px;padding:8px 13px}
+
+  nav{
+    position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;
+    background:rgba(255,255,255,.94);backdrop-filter:blur(10px);
+    border-top:1px solid #e7e0f3;display:flex;z-index:30;padding-bottom:env(safe-area-inset-bottom);
+  }
+  nav button{flex:1;background:none;border-radius:0;padding:10px 0 12px;font-size:11px;font-weight:600;color:var(--ink-soft);display:flex;flex-direction:column;gap:3px;align-items:center}
+  nav button .ico{font-size:20px}
+  nav button.active{color:var(--lavender-deep)}
+
+  .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:13.5px;padding:10px 18px;border-radius:99px;z-index:60;opacity:0;transition:opacity .25s;pointer-events:none;max-width:90%;text-align:center}
+  .toast.show{opacity:1}
+
+  /* guest invite view */
+  body.guest header,body.guest main,body.guest nav{display:none}
+  #guestView{display:none}
+  body.guest #guestView{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-height:100dvh;padding:24px 20px;text-align:center;
+    background:linear-gradient(170deg,#ece7f6 0%,#fdf3ec 55%,#fbe9ee 100%);
+  }
+  #guestView .gv-eyebrow{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--lavender-deep);margin-bottom:10px}
+  #guestView h1{font-family:Georgia,serif;font-weight:400;font-size:34px;line-height:1.2}
+  #guestView h1 em{font-style:italic;color:var(--lavender-deep)}
+  #guestView .gv-sub{font-size:13px;letter-spacing:1px;color:var(--ink-soft);margin-top:8px;text-transform:uppercase}
+  #guestView .gv-dear{font-family:Georgia,serif;font-style:italic;font-size:19px;margin-top:26px}
+  #guestView .gv-card{background:#fff;border-radius:18px;padding:20px 22px 16px;margin-top:16px;box-shadow:0 10px 34px rgba(93,75,145,.16);border:1px solid #e6dff3}
+  #guestView .gv-qr{display:flex;justify-content:center}
+  #guestView .gv-instr{font-size:12.5px;color:var(--ink-soft);margin-top:12px;line-height:1.55;max-width:280px}
+  #guestView .gv-foot{font-size:11px;color:#a79bc4;margin-top:22px;letter-spacing:.5px}
+
+  /* print sheet */
+  #printArea{display:none}
+  @media print{
+    body>*{display:none!important}
+    body{background:#fff;max-width:none}
+    #printArea{display:block!important;padding:0}
+    .p-grid{display:grid;grid-template-columns:1fr 1fr;gap:6mm}
+    .p-ticket{border:1px solid #cbc2e0;border-radius:4mm;padding:5mm;text-align:center;page-break-inside:avoid}
+    .p-ticket h3{font-family:Georgia,serif;font-weight:400;font-size:13pt;color:#5d4b91}
+    .p-ticket .sub{font-size:8pt;letter-spacing:1px;text-transform:uppercase;color:#6b5f82;margin:1mm 0 3mm}
+    .p-ticket .nm{font-family:Georgia,serif;font-size:12pt;margin-top:3mm}
+    .p-ticket .mt{font-size:8.5pt;color:#6b5f82}
+    .p-ticket .qr{display:flex;justify-content:center}
+    .p-ticket .cd{font-family:monospace;font-size:6pt;color:#a79bc4;margin-top:2mm;word-break:break-all}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="head-row">
+    <div class="monogram">
+      <h1 class="serif" id="eventTitle">Codas <em>&amp;</em> Obinna</h1>
+      <div class="event-sub" id="eventSub">December 2026 · Abuja · Strictly by invitation</div>
+    </div>
+    <div class="badges">
+      <span class="net on" id="netBadge">Synced</span>
+      <span class="role usher" id="roleBadge">Scanner</span>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><b id="statGuests">0</b><span>Invites</span></div>
+    <div class="stat"><b id="statSeats">0</b><span>Seats</span></div>
+    <div class="stat"><b id="statIn">0</b><span>Checked in</span></div>
+  </div>
+</header>
+
+<main>
+  <!-- ============ SCANNER (default screen — no unlock needed) ============ -->
+  <section class="panel active" id="panel-scan">
+    <h2 class="section">Door check-in</h2>
+    <div id="reader" aria-label="QR camera view"></div>
+    <div class="scan-tools">
+      <button class="btn-primary" id="camBtn" onclick="toggleCamera()">Start camera</button>
+      <button class="btn-quiet" onclick="document.getElementById('qrFile').click()">Scan from photo</button>
+      <input type="file" id="qrFile" accept="image/*" style="display:none" onchange="scanFromFile(this)">
+    </div>
+    <div class="scan-result" id="scanResult" role="status" aria-live="polite"></div>
+    <div class="pending-badge" id="pendingBadge"></div>
+
+    <div class="lookup">
+      <div class="field">
+        <label for="lookupName">Can't scan? Find guest by name</label>
+        <input type="text" id="lookupName" placeholder="Start typing a name…" autocomplete="off" oninput="lookup()">
+      </div>
+      <div id="lookupResults"></div>
+    </div>
+
+    <div class="field" style="margin-top:8px">
+      <label for="sDevice">This phone's name (shows on check-in records)</label>
+      <div class="row">
+        <input class="grow" type="text" id="sDevice" placeholder="e.g. Main door — Ada">
+        <button class="btn-quiet" onclick="saveDevice()">Save</button>
+      </div>
+    </div>
+    <p class="cam-note">Camera blocked in this preview? Use “Scan from photo”, or open the downloaded file in Chrome/Safari on the phone.</p>
+  </section>
+
+  <!-- ============ ORGANIZER (locked) ============ -->
+  <section class="panel" id="panel-org">
+    <!-- setup: first ever run -->
+    <div id="orgSetup" style="display:none">
+      <div class="lock">
+        <div class="big">🔐</div>
+        <p>Welcome! Set an organizer passphrase to begin.<br>Only someone with this passphrase can create or edit invites — scanner phones never need it.</p>
+        <input type="password" id="setupPass" placeholder="Choose a passphrase">
+        <input type="password" id="setupPass2" placeholder="Repeat passphrase">
+        <button class="btn-primary" onclick="doSetup()">Create organizer keys</button>
+      </div>
+    </div>
+    <!-- locked: usher / not yet unlocked -->
+    <div id="orgLocked" style="display:none">
+      <div class="lock">
+        <div class="big">🔒</div>
+        <p>Organizer area — creating and editing invites is locked.<br>Ushers don't need anything here; check-in works from the Scan tab.</p>
+        <input type="password" id="unlockPass" placeholder="Organizer passphrase">
+        <button class="btn-primary" onclick="doUnlock()">Unlock</button>
+      </div>
+    </div>
+    <!-- unlocked organizer tools -->
+    <div id="orgTools" style="display:none">
+      <h2 class="section">Guest list</h2>
+      <div class="field">
+        <label for="gName">Guest name</label>
+        <div class="row">
+          <input class="grow" type="text" id="gName" placeholder="e.g. Ngozi Adeyemi" autocomplete="off">
+          <input class="narrow" type="number" id="gParty" min="1" max="20" value="1" aria-label="Party size" title="Seats">
+        </div>
+      </div>
+      <button class="btn-primary" onclick="addGuest()">Add guest &amp; generate code</button>
+      <div class="list-tools">
+        <button class="btn-quiet" onclick="refreshAll(true)">↻ Refresh sync</button>
+        <button class="btn-quiet" onclick="printAll()">🖨 Print all invites</button>
+      </div>
+      <div id="guestList"></div>
+
+      <h2 class="section" style="margin-top:26px">Event details</h2>
+      <div class="field"><label for="sTitle">Couple / event name</label><input type="text" id="sTitle"></div>
+      <div class="field"><label for="sSub">Subtitle (date · venue)</label><input type="text" id="sSub"></div>
+      <div class="field"><label for="sUrl">Invite page link (optional)</label><input type="text" id="sUrl" placeholder="https://yourname.github.io/invite.html" inputmode="url"></div>
+      <p class="hint">Host this same file anywhere public and paste its link here — new QR codes then open a personal invite page when guests scan with their own camera. Door phones verify them exactly the same.</p>
+      <button class="btn-primary" onclick="saveSettings()">Save details</button>
+
+      <h2 class="section" style="margin-top:26px">Data</h2>
+      <div class="row">
+        <button class="btn-quiet grow" onclick="exportData()">Export backup</button>
+        <button class="btn-danger grow" onclick="resetCheckins()">Reset check-ins</button>
+      </div>
+      <div style="text-align:center;margin-top:14px"><button class="btn-ghost" onclick="doLock()">🔒 Lock organizer area</button></div>
+    </div>
+  </section>
+</main>
+
+<nav aria-label="Sections">
+  <button class="active" id="tab-scan" onclick="showPanel('scan')"><span class="ico">📷</span>Scan</button>
+  <button id="tab-org" onclick="showPanel('org')"><span class="ico">🔐</span>Organizer</button>
+</nav>
+
+<!-- QR ticket sheet -->
+<div class="overlay" id="ticketOverlay" onclick="if(event.target===this)closeTicket()">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div class="ticket">
+      <div class="ticket-top">
+        <div class="serif" id="tTitle"></div>
+        <small id="tSub"></small>
+      </div>
+      <div class="ticket-perf"></div>
+      <div class="ticket-body">
+        <div class="qr-holder"><div id="qrBox"></div></div>
+        <div class="ticket-name" id="tName"></div>
+        <div class="ticket-meta" id="tMeta"></div>
+        <div class="ticket-code" id="tCode"></div>
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn-primary" onclick="shareTicket()">Share</button>
+      <button class="btn-quiet" onclick="downloadTicket()">Save PNG</button>
+      <button class="btn-quiet" onclick="closeTicket()">Close</button>
+    </div>
+  </div>
+</div>
+
+<section id="guestView" aria-label="Your invitation">
+  <div class="gv-eyebrow">You are warmly invited</div>
+  <h1 id="gvTitle"></h1>
+  <div class="gv-sub" id="gvSub"></div>
+  <div class="gv-dear" id="gvDear"></div>
+  <div class="gv-card"><div class="gv-qr" id="gvQr"></div></div>
+  <div class="gv-instr">This is your personal entry pass. Please present this code at the entrance on the day — our team will scan it to welcome you in. Kindly don't share it; it admits your party only once.</div>
+  <div class="gv-foot">With love · save this page or take a screenshot</div>
+</section>
+
+<div id="printArea"><div class="p-grid" id="printGrid"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   Invite Gate v3 — privilege-separated wedding QR system
+   ---------------------------------------------------------------------
+   ROLES
+   - Scanner (default, no credentials): verify codes, check guests in.
+   - Organizer (passphrase): create/edit invites, event settings, data.
+   CRYPTO (why ushers can verify but never generate)
+   - Codes are ECDSA P-256 signatures:  sig = Sign(privKey, id|name)
+   - The PUBLIC key (verify-only) syncs to every phone.
+   - The PRIVATE key is stored AES-GCM-encrypted under a key derived
+     from the organizer passphrase (PBKDF2, 200k iters). Without the
+     passphrase it is mathematically unusable — a scanner phone holds
+     nothing that can mint a valid code.
+   SYNC (the "Eurostar server")
+   - Shared cloud keys: "wedqr3:core" (event, guests, pubkey, encrypted
+     privkey) and "checkin:<id>" (one key per guest → no write races
+     between door phones). Local cache per phone for offline; check-ins
+     queue offline and auto-flush.
+   QR payload: WP2|<id>|<base64url ECDSA signature>  (optionally wrapped
+   in the invite-page URL after "#").
+===================================================================== */
+const CORE_KEY="wedqr3:core", CACHE_KEY="wedqr3:cache", DEV_KEY="wedqr3:device";
+let CORE=null;   // {event:{title,sub}, baseUrl, pub, lock:{salt,iv,ct}, guests:[{id,name,party,sig}]}
+let PRIV=null;   // decrypted private key JWK — memory only, organizer session only
+let checked={}, localSeen={}, pendingWrites=[];
+let device={label:""};
+let online=true, currentTicket=null, scanner=null, camOn=false, lastScanAt=0;
+
+const DEFAULT_EVENT={title:"Codas & Obinna",sub:"December 2026 · Abuja · Strictly by invitation"};
+const $=id=>document.getElementById(id);
+const AV_COLORS=["#7c6aae","#b98bb0","#d99e9b","#e0ab86","#8f7fc0","#c295a4"];
+const enc=s=>new TextEncoder().encode(s);
+
+/* ---------- encoding helpers ---------- */
+function b64u(a){let s="";a.forEach(b=>s+=String.fromCharCode(b));return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");}
+function fromB64u(s){s=s.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";const b=atob(s),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a;}
+function randHex(n){const a=new Uint8Array(n/2);crypto.getRandomValues(a);return[...a].map(b=>b.toString(16).padStart(2,"0")).join("");}
+
+/* ---------- asymmetric signing ---------- */
+function guestMsg(id,name){return id+"|"+name.trim().toLowerCase();}
+async function importPriv(jwk){return crypto.subtle.importKey("jwk",jwk,{name:"ECDSA",namedCurve:"P-256"},false,["sign"]);}
+async function importPub(jwk){return crypto.subtle.importKey("jwk",jwk,{name:"ECDSA",namedCurve:"P-256"},false,["verify"]);}
+async function signGuest(id,name){
+  const k=await importPriv(PRIV);
+  const sig=await crypto.subtle.sign({name:"ECDSA",hash:"SHA-256"},k,enc(guestMsg(id,name)));
+  return b64u(new Uint8Array(sig));
+}
+async function verifyGuestSig(g,sigB64){
+  try{
+    const k=await importPub(CORE.pub);
+    return await crypto.subtle.verify({name:"ECDSA",hash:"SHA-256"},k,fromB64u(sigB64),enc(guestMsg(g.id,g.name)));
+  }catch(e){return false;}
+}
+
+/* ---------- passphrase → AES key (protects the private key) ---------- */
+async function deriveAes(pass,saltB64){
+  const km=await crypto.subtle.importKey("raw",enc(pass),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt:fromB64u(saltB64),iterations:200000,hash:"SHA-256"},
+    km,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+async function encryptPriv(privJwk,pass){
+  const salt=b64u(crypto.getRandomValues(new Uint8Array(16)));
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveAes(pass,salt);
+  const ct=await crypto.subtle.encrypt({name:"AES-GCM",iv},key,enc(JSON.stringify(privJwk)));
+  return{salt,iv:b64u(iv),ct:b64u(new Uint8Array(ct))};
+}
+async function decryptPriv(lock,pass){
+  const key=await deriveAes(pass,lock.salt);
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:fromB64u(lock.iv)},key,fromB64u(lock.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
+/* ---------- payload ---------- */
+function rawCode(g){return"WP2|"+g.id+"|"+g.sig;}
+function payload(g){
+  const u=(CORE.baseUrl||"").trim();
+  if(!u)return rawCode(g);
+  return u.replace(/#.*$/,"")+"#"+rawCode(g)+"|"+encodeURIComponent(g.name)+"|"+encodeURIComponent(CORE.event.title)+"|"+encodeURIComponent(CORE.event.sub);
+}
+
+/* ---------- storage ---------- */
+async function sGet(k,shared){try{const r=await window.storage.get(k,shared);setNet(true);return r?r.value:null;}catch(e){if(/not found|404|exist/i.test(String(e))){setNet(true);return null;}setNet(false);return null;}}
+async function sSet(k,v,shared){try{await window.storage.set(k,v,shared);setNet(true);return true;}catch(e){setNet(false);return false;}}
+async function sList(prefix,shared){try{const r=await window.storage.list(prefix,shared);setNet(true);return r&&r.keys?r.keys:[];}catch(e){setNet(false);return null;}}
+function setNet(on){
+  online=on;const b=$("netBadge");
+  b.className="net "+(on?"on":"off");b.textContent=on?"Synced":"Offline";
+  updatePendingBadge();
+}
+
+/* ---------- boot ---------- */
+async function boot(){
+  const d=await sGet(DEV_KEY,false);if(d){try{device=JSON.parse(d);$("sDevice").value=device.label||"";}catch(e){}}
+  let raw=await sGet(CORE_KEY,true);
+  if(!raw)raw=await sGet(CACHE_KEY,false);
+  if(raw){try{CORE=JSON.parse(raw);}catch(e){CORE=null;}}
+  await refreshCheckins();
+  render();renderOrgPanel();
+  setInterval(async()=>{await flushPending();await refreshCheckins();render();},12000);
+}
+async function persistCore(){
+  const raw=JSON.stringify(CORE);
+  const ok=await sSet(CORE_KEY,raw,true);
+  await sSet(CACHE_KEY,raw,false);
+  if(!ok)toast("Saved locally — will sync when back online");
+}
+async function refreshCheckins(){
+  const keys=await sList("checkin:",true);
+  if(keys===null)return;
+  const fresh={};
+  keys.forEach(k=>{const id=k.slice(8);fresh[id]=checked[id]||{at:null,by:""};});
+  checked=fresh;
+  Object.keys(localSeen).forEach(id=>{if(!checked[id])checked[id]=localSeen[id];});
+}
+async function refreshAll(manual){
+  const raw=await sGet(CORE_KEY,true);
+  if(raw){try{CORE=JSON.parse(raw);await sSet(CACHE_KEY,raw,false);}catch(e){}}
+  await refreshCheckins();render();renderOrgPanel();
+  if(manual)toast(online?"Guest list synced":"Offline — showing last known data");
+}
+
+/* ---------- offline queue ---------- */
+async function flushPending(){
+  if(!pendingWrites.length)return;
+  const still=[];
+  for(const w of pendingWrites){
+    const ok=await sSet("checkin:"+w.id,JSON.stringify(w.rec),true);
+    if(!ok)still.push(w);
+  }
+  pendingWrites=still;updatePendingBadge();
+  if(!still.length&&online)toast("All offline check-ins synced ✓");
+}
+function updatePendingBadge(){
+  const b=$("pendingBadge");
+  if(pendingWrites.length){b.classList.add("show");b.textContent="⏳ "+pendingWrites.length+" check-in"+(pendingWrites.length>1?"s":"")+" waiting to sync — sends automatically";}
+  else b.classList.remove("show");
+}
+
+/* ---------- organizer setup / unlock ---------- */
+function renderOrgPanel(){
+  const setup=!CORE||!CORE.pub;
+  $("orgSetup").style.display=setup?"block":"none";
+  $("orgLocked").style.display=(!setup&&!PRIV)?"block":"none";
+  $("orgTools").style.display=(!setup&&PRIV)?"block":"none";
+  const r=$("roleBadge");
+  r.className="role "+(PRIV?"org":"usher");
+  r.textContent=PRIV?"Organizer":"Scanner";
+  if(PRIV){$("sTitle").value=CORE.event.title;$("sSub").value=CORE.event.sub;$("sUrl").value=CORE.baseUrl||"";}
+}
+async function doSetup(){
+  const p1=$("setupPass").value,p2=$("setupPass2").value;
+  if(p1.length<6){toast("Passphrase should be at least 6 characters");return;}
+  if(p1!==p2){toast("Passphrases don't match");return;}
+  const kp=await crypto.subtle.generateKey({name:"ECDSA",namedCurve:"P-256"},true,["sign","verify"]);
+  const privJwk=await crypto.subtle.exportKey("jwk",kp.privateKey);
+  const pubJwk=await crypto.subtle.exportKey("jwk",kp.publicKey);
+  CORE={event:{...DEFAULT_EVENT},baseUrl:"",pub:pubJwk,lock:await encryptPriv(privJwk,p1),guests:[]};
+  PRIV=privJwk;
+  await persistCore();
+  $("setupPass").value="";$("setupPass2").value="";
+  render();renderOrgPanel();
+  toast("Organizer keys created — you're unlocked");
+}
+async function doUnlock(){
+  const p=$("unlockPass").value;
+  if(!p){toast("Enter the passphrase");return;}
+  try{PRIV=await decryptPriv(CORE.lock,p);}
+  catch(e){toast("Wrong passphrase");return;}
+  $("unlockPass").value="";
+  renderOrgPanel();toast("Organizer unlocked");
+}
+function doLock(){PRIV=null;renderOrgPanel();showPanel("scan");toast("Organizer locked");}
+
+/* ---------- guests (organizer only — guarded by PRIV) ---------- */
+async function addGuest(){
+  if(!PRIV)return;
+  const name=$("gName").value.trim();
+  const party=Math.max(1,parseInt($("gParty").value||"1",10));
+  if(!name){toast("Enter a guest name");return;}
+  const id=randHex(10);
+  const g={id,name,party,sig:await signGuest(id,name)};
+  CORE.guests.unshift(g);
+  await persistCore();
+  $("gName").value="";$("gParty").value="1";
+  render();openTicket(g);
+}
+async function removeGuest(id){
+  if(!PRIV)return;
+  const g=CORE.guests.find(x=>x.id===id);if(!g)return;
+  if(!confirm("Remove "+g.name+"? Their QR code will stop working."))return;
+  CORE.guests=CORE.guests.filter(x=>x.id!==id);
+  await persistCore();render();
+}
+function render(){
+  const ev=(CORE&&CORE.event)||DEFAULT_EVENT;
+  const guests=(CORE&&CORE.guests)||[];
+  $("eventTitle").innerHTML=escapeHtml(ev.title).replace("&amp;","<em>&amp;</em>");
+  $("eventSub").textContent=ev.sub;
+  $("statGuests").textContent=guests.length;
+  $("statSeats").textContent=guests.reduce((s,g)=>s+g.party,0);
+  $("statIn").textContent=guests.filter(g=>checked[g.id]).length;
+  const list=$("guestList");if(!list)return;
+  if(!guests.length){
+    list.innerHTML='<div class="empty"><div class="big">💌</div>No invites yet.<br>Add your first guest above to create their unique QR code.</div>';
+    return;
+  }
+  list.innerHTML=guests.map((g,i)=>{
+    const c=checked[g.id];
+    return `<div class="guest">
+      <div class="avatar" style="background:${AV_COLORS[i%AV_COLORS.length]}">${escapeHtml(g.name[0].toUpperCase())}</div>
+      <div class="info"><b>${escapeHtml(g.name)}</b>
+        <small>${g.party} seat${g.party>1?"s":""}${c&&c.at?" · in at "+fmtTime(c.at)+(c.by?" ("+escapeHtml(c.by)+")":""):""}</small>
+      </div>
+      <span class="pill ${c?"in":"out"}">${c?"In":"Invited"}</span>
+      <div class="guest-actions">
+        <button class="icon-btn" title="Show QR" aria-label="Show QR for ${escapeHtml(g.name)}" onclick="openTicketById('${g.id}')">▣</button>
+        <button class="icon-btn" title="Remove" aria-label="Remove ${escapeHtml(g.name)}" onclick="removeGuest('${g.id}')">✕</button>
+      </div>
+    </div>`;}).join("");
+}
+
+/* ---------- name lookup (scanner fallback) ---------- */
+function lookup(){
+  const q=$("lookupName").value.trim().toLowerCase();
+  const out=$("lookupResults");
+  if(q.length<2){out.innerHTML="";return;}
+  const guests=(CORE&&CORE.guests)||[];
+  const hits=guests.filter(g=>g.name.toLowerCase().includes(q)).slice(0,6);
+  if(!hits.length){out.innerHTML='<div class="hint" style="margin-top:6px">No guest matches “'+escapeHtml(q)+'”.</div>';return;}
+  out.innerHTML=hits.map(g=>{
+    const c=checked[g.id];
+    return `<div class="guest">
+      <div class="info"><b>${escapeHtml(g.name)}</b><small>${g.party} seat${g.party>1?"s":""}${c?" · already in"+(c.at?" at "+fmtTime(c.at):""):""}</small></div>
+      ${c?'<span class="pill in">In</span>':'<button class="admit-btn" onclick="manualAdmit(\''+g.id+'\')">Admit</button>'}
+    </div>`;}).join("");
+}
+async function manualAdmit(id){
+  const g=(CORE&&CORE.guests||[]).find(x=>x.id===id);if(!g)return;
+  if(checked[g.id]){toast(g.name+" is already checked in");lookup();return;}
+  const rec={at:new Date().toISOString(),by:(device.label||"door phone")+" · manual"};
+  checked[g.id]=rec;localSeen[g.id]=rec;
+  const ok=await sSet("checkin:"+g.id,JSON.stringify(rec),true);
+  if(!ok){pendingWrites.push({id:g.id,rec});updatePendingBadge();}
+  render();lookup();
+  toast("✓ "+g.name+" checked in (manual)");
+}
+
+/* ---------- ticket ---------- */
+function openTicketById(id){const g=CORE.guests.find(x=>x.id===id);if(g)openTicket(g);}
+function openTicket(g){
+  currentTicket=g;
+  $("tTitle").textContent=CORE.event.title;
+  $("tSub").textContent=CORE.event.sub;
+  $("tName").textContent=g.name;
+  $("tMeta").textContent="Admits "+g.party+(g.party>1?" guests":" guest");
+  $("tCode").textContent=rawCode(g);
+  $("qrBox").innerHTML="";
+  new QRCode($("qrBox"),{text:payload(g),width:210,height:210,colorDark:"#2e2440",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
+  $("ticketOverlay").classList.add("show");
+}
+function closeTicket(){$("ticketOverlay").classList.remove("show");}
+
+function ticketCanvas(g){
+  const src=$("qrBox").querySelector("canvas")||$("qrBox").querySelector("img");
+  const W=640,H=880,c=document.createElement("canvas");c.width=W;c.height=H;
+  const x=c.getContext("2d");
+  x.fillStyle="#fff";x.fillRect(0,0,W,H);
+  const grad=x.createLinearGradient(0,0,W,200);
+  grad.addColorStop(0,"#7c6aae");grad.addColorStop(1,"#5d4b91");
+  x.fillStyle=grad;x.fillRect(0,0,W,190);
+  x.fillStyle="#fff";x.textAlign="center";
+  x.font="italic 40px Georgia";x.fillText(CORE.event.title,W/2,90);
+  x.font="16px Georgia";x.globalAlpha=.9;x.fillText(CORE.event.sub.toUpperCase(),W/2,135);x.globalAlpha=1;
+  x.strokeStyle="#ddd4ee";x.setLineDash([10,8]);x.lineWidth=3;
+  x.beginPath();x.moveTo(0,190);x.lineTo(W,190);x.stroke();x.setLineDash([]);
+  const qs=380;x.drawImage(src,(W-qs)/2,240,qs,qs);
+  x.fillStyle="#2e2440";x.font="34px Georgia";x.fillText(g.name,W/2,690);
+  x.fillStyle="#6b5f82";x.font="20px sans-serif";x.fillText("Admits "+g.party+(g.party>1?" guests":" guest"),W/2,728);
+  x.font="11px monospace";x.fillStyle="#a79bc4";x.fillText(rawCode(g).slice(0,70),W/2,784);x.fillText(rawCode(g).slice(70),W/2,802);
+  x.font="13px sans-serif";x.fillStyle="#b7aed0";x.fillText("Please present this code at the entrance · non-transferable",W/2,838);
+  return c;
+}
+function downloadTicket(){
+  const g=currentTicket;if(!g)return;
+  const a=document.createElement("a");
+  a.download="invite-"+g.name.replace(/\s+/g,"-").toLowerCase()+".png";
+  a.href=ticketCanvas(g).toDataURL("image/png");a.click();
+  toast("Invite PNG saved");
+}
+async function shareTicket(){
+  const g=currentTicket;if(!g)return;
+  try{
+    const blob=await new Promise(r=>ticketCanvas(g).toBlob(r,"image/png"));
+    const file=new File([blob],"invite-"+g.name.replace(/\s+/g,"-").toLowerCase()+".png",{type:"image/png"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:CORE.event.title+" — invitation",
+        text:"Dear "+g.name+", you're warmly invited to "+CORE.event.title+". Please present this QR code at the entrance."+((CORE.baseUrl||"").trim()?" Your personal invite: "+payload(g):"")});
+    }else{downloadTicket();toast("Sharing not supported here — PNG saved instead");}
+  }catch(e){/* cancelled */}
+}
+
+/* ---------- print all ---------- */
+function printAll(){
+  if(!CORE.guests.length){toast("No guests to print yet");return;}
+  const grid=$("printGrid");grid.innerHTML="";
+  CORE.guests.forEach(g=>{
+    const d=document.createElement("div");d.className="p-ticket";
+    d.innerHTML='<h3>'+escapeHtml(CORE.event.title)+'</h3><div class="sub">'+escapeHtml(CORE.event.sub)+'</div><div class="qr"></div>'
+      +'<div class="nm">'+escapeHtml(g.name)+'</div><div class="mt">Admits '+g.party+(g.party>1?' guests':' guest')+'</div>'
+      +'<div class="cd">'+rawCode(g)+'</div>';
+    grid.appendChild(d);
+    new QRCode(d.querySelector(".qr"),{text:payload(g),width:150,height:150,colorDark:"#2e2440",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
+  });
+  setTimeout(()=>window.print(),300);
+}
+
+/* ---------- verification (scanner — public key only) ---------- */
+async function verify(text){
+  const now=Date.now();
+  if(now-lastScanAt<1600)return;
+  lastScanAt=now;
+  const box=$("scanResult");
+  const show=(cls,verdict,who,detail)=>{
+    box.className="scan-result show "+cls;
+    box.innerHTML='<div class="verdict">'+verdict+'</div>'+(who?'<div class="who">'+escapeHtml(who)+'</div>':"")+(detail?'<div class="detail">'+detail+'</div>':"");
+    if(navigator.vibrate)navigator.vibrate(cls==="ok"?[60]:[80,60,80]);
+  };
+  const rawText=(text||"").trim();
+  const idx=rawText.indexOf("WP2|");
+  const parts=(idx>=0?rawText.slice(idx):rawText).split("|");
+  if(parts.length<3||parts[0]!=="WP2"){show("bad","✕ NOT VALID","","This is not an invite code for this event.");return;}
+  if(!CORE||!CORE.guests||!CORE.guests.length)await refreshAll(false);
+  if(!CORE||!CORE.pub){show("bad","✕ NOT SET UP","","This phone hasn't synced the event yet — connect to the internet once and try again.");return;}
+  const g=CORE.guests.find(x=>x.id===parts[1]);
+  if(!g){show("bad","✕ NOT VALID","","No matching invite — possibly revoked, or the guest list hasn't synced (go online once, then rescan).");return;}
+  const sigOk=await verifyGuestSig(g,parts[2]);
+  if(!sigOk||g.sig!==parts[2]){show("bad","✕ FORGED",g.name,"Signature check failed — do not admit.");return;}
+
+  let dup=checked[g.id]||localSeen[g.id]||null;
+  if(!dup){
+    const liveRaw=await sGet("checkin:"+g.id,true);
+    if(liveRaw){try{dup=JSON.parse(liveRaw);}catch(e){dup={at:null,by:""};}}
+  }
+  if(dup){
+    show("dup","⚠ ALREADY USED",g.name,"Checked in"+(dup.at?" at "+fmtTime(dup.at):"")+(dup.by?" · "+escapeHtml(dup.by):"")+". Possible screenshot re-use — check ID before admitting.");
+    return;
+  }
+  const rec={at:new Date().toISOString(),by:device.label||"door phone"};
+  checked[g.id]=rec;localSeen[g.id]=rec;
+  const okWrite=await sSet("checkin:"+g.id,JSON.stringify(rec),true);
+  if(!okWrite){pendingWrites.push({id:g.id,rec});updatePendingBadge();}
+  render();
+  show("ok","✓ WELCOME",g.name,"Party of "+g.party+" · "+fmtTime(rec.at)+(okWrite?"":" · offline — will sync"));
+}
+
+/* ---------- camera / photo ---------- */
+async function toggleCamera(){
+  if(camOn){await stopCamera();return;}
+  try{
+    scanner=scanner||new Html5Qrcode("reader");
+    await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:230,height:230}},t=>verify(t),()=>{});
+    camOn=true;$("camBtn").textContent="Stop camera";
+  }catch(e){toast("Camera unavailable here — use 'Scan from photo', or open the downloaded file in the phone's browser.");}
+}
+async function stopCamera(){try{await scanner.stop();}catch(e){}camOn=false;$("camBtn").textContent="Start camera";}
+async function scanFromFile(input){
+  const f=input.files&&input.files[0];if(!f)return;
+  try{scanner=scanner||new Html5Qrcode("reader");verify(await scanner.scanFile(f,false));}
+  catch(e){
+    $("scanResult").className="scan-result show bad";
+    $("scanResult").innerHTML='<div class="verdict">✕ No QR found</div><div class="detail">Try a sharper, well-lit photo of the code.</div>';
+  }
+  input.value="";
+}
+
+/* ---------- settings / data (organizer) ---------- */
+async function saveSettings(){
+  if(!PRIV)return;
+  CORE.event.title=$("sTitle").value.trim()||CORE.event.title;
+  CORE.event.sub=$("sSub").value.trim()||CORE.event.sub;
+  CORE.baseUrl=$("sUrl").value.trim();
+  await persistCore();render();toast("Event details saved");
+}
+async function saveDevice(){
+  device.label=$("sDevice").value.trim();
+  await sSet(DEV_KEY,JSON.stringify(device),false);
+  toast(device.label?("This phone is now “"+device.label+"”"):"Device name cleared");
+}
+function exportData(){
+  if(!PRIV)return;
+  const dump={core:CORE,checkins:checked,exportedAt:new Date().toISOString()};
+  const a=document.createElement("a");
+  a.download="wedding-guests-backup.json";
+  a.href="data:application/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(dump,null,2));
+  a.click();
+}
+async function resetCheckins(){
+  if(!PRIV)return;
+  if(!confirm("Clear ALL check-in marks on every phone? (Guest list and codes stay.)"))return;
+  const keys=await sList("checkin:",true);
+  if(keys===null){toast("Can't reset while offline");return;}
+  for(const k of keys){try{await window.storage.delete(k,true);}catch(e){}}
+  checked={};localSeen={};pendingWrites=[];updatePendingBadge();render();
+  toast("Check-ins reset everywhere");
+}
+
+/* ---------- guest invite view (opened via QR link) ---------- */
+function tryGuestView(){
+  const h=(location.hash||"").replace(/^#/,"");
+  const idx=h.indexOf("WP2|");
+  if(idx<0)return false;
+  const p=h.slice(idx).split("|");
+  if(p.length<3)return false;
+  const code=p.slice(0,3).join("|");
+  const name=p[3]?safeDecode(p[3]):"";
+  const title=p[4]?safeDecode(p[4]):DEFAULT_EVENT.title;
+  const sub=p[5]?safeDecode(p[5]):DEFAULT_EVENT.sub;
+  document.body.classList.add("guest");
+  $("gvTitle").innerHTML=escapeHtml(title).replace("&amp;","<em>&amp;</em>");
+  $("gvSub").textContent=sub;
+  $("gvDear").textContent=name?("Dear "+name+","):"";
+  new QRCode($("gvQr"),{text:code,width:220,height:220,colorDark:"#2e2440",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
+  document.title=title+" — Invitation";
+  return true;
+}
+function safeDecode(s){try{return decodeURIComponent(s);}catch(e){return s;}}
+
+/* ---------- UI plumbing ---------- */
+function showPanel(name){
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll("nav button").forEach(b=>b.classList.remove("active"));
+  $("panel-"+name).classList.add("active");
+  $("tab-"+name).classList.add("active");
+  if(name!=="scan"&&camOn)stopCamera();
+  if(name==="org")renderOrgPanel();
+}
+function fmtTime(iso){try{return new Date(iso).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}catch(e){return"";}}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function toast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2800);}
+document.addEventListener("keydown",e=>{
+  if(e.key!=="Enter")return;
+  const a=document.activeElement&&document.activeElement.id;
+  if(a==="gName")addGuest();
+  else if(a==="unlockPass")doUnlock();
+  else if(a==="setupPass2")doSetup();
+});
+if(!tryGuestView())boot();
+</script>
+</body>
+</html>
