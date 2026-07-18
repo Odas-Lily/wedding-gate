@@ -106,7 +106,7 @@
   .qr-holder{display:flex;justify-content:center;margin:4px 0 12px}
   .ticket-name{font-family:Georgia,serif;font-size:21px}
   .ticket-meta{font-size:12.5px;color:var(--ink-soft);margin-top:4px}
-  .ticket-code{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#a79bc4;margin-top:10px;letter-spacing:.5px;word-break:break-all}
+  .ticket-code{font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:600;color:var(--ink-soft);margin-top:10px;letter-spacing:3px}
   .sheet-actions{display:flex;gap:8px;margin-top:14px}
   .sheet-actions button{flex:1}
 
@@ -162,6 +162,7 @@
   #guestView .gv-dear{font-family:Georgia,serif;font-style:italic;font-size:19px;margin-top:26px}
   #guestView .gv-card{background:#fff;border-radius:18px;padding:20px 22px 16px;margin-top:16px;box-shadow:0 10px 34px rgba(93,75,145,.16);border:1px solid #e6dff3}
   #guestView .gv-qr{display:flex;justify-content:center}
+  #guestView .gv-ref{font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:600;letter-spacing:3px;color:var(--ink-soft);margin-top:12px}
   #guestView .gv-instr{font-size:12.5px;color:var(--ink-soft);margin-top:12px;line-height:1.55;max-width:280px}
   #guestView .gv-foot{font-size:11px;color:#a79bc4;margin-top:22px;letter-spacing:.5px}
 
@@ -177,7 +178,7 @@
     .p-ticket .nm{font-family:Georgia,serif;font-size:12pt;margin-top:3mm}
     .p-ticket .mt{font-size:8.5pt;color:#6b5f82}
     .p-ticket .qr{display:flex;justify-content:center}
-    .p-ticket .cd{font-family:monospace;font-size:6pt;color:#a79bc4;margin-top:2mm;word-break:break-all}
+    .p-ticket .cd{font-family:monospace;font-size:9.5pt;font-weight:600;letter-spacing:2px;color:#6b5f82;margin-top:2mm}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -216,8 +217,8 @@
 
     <div class="lookup">
       <div class="field">
-        <label for="lookupName">Can't scan? Find guest by name</label>
-        <input type="text" id="lookupName" placeholder="Start typing a name…" autocomplete="off" oninput="lookup()">
+        <label for="lookupName">Can't scan? Enter the guest's entry code</label>
+        <input type="text" id="lookupName" placeholder="e.g. K7NPQ4 (or search a name)" autocomplete="off" autocapitalize="characters" oninput="lookup()">
       </div>
       <div id="lookupResults"></div>
     </div>
@@ -326,7 +327,7 @@
   <h1 id="gvTitle"></h1>
   <div class="gv-sub" id="gvSub"></div>
   <div class="gv-dear" id="gvDear"></div>
-  <div class="gv-card"><div class="gv-qr" id="gvQr"></div></div>
+  <div class="gv-card"><div class="gv-qr" id="gvQr"></div><div class="gv-ref" id="gvRef"></div></div>
   <div class="gv-instr">This is your personal entry pass. Please present this code at the entrance on the day — our team will scan it to welcome you in. Kindly don't share it; it admits your party only once.</div>
   <div class="gv-foot">With love · save this page or take a screenshot</div>
 </section>
@@ -433,7 +434,7 @@ function rawCode(g){return"WP2|"+g.id+"|"+g.sig;}
 function payload(g){
   const u=(CORE.baseUrl||"").trim();
   if(!u)return rawCode(g);
-  return u.replace(/#.*$/,"")+"#"+rawCode(g)+"|"+encodeURIComponent(g.name)+"|"+encodeURIComponent(CORE.event.title)+"|"+encodeURIComponent(CORE.event.sub);
+  return u.replace(/#.*$/,"")+"#"+rawCode(g)+"|"+encodeURIComponent(g.name)+"|"+encodeURIComponent(CORE.event.title)+"|"+encodeURIComponent(CORE.event.sub)+"|"+(g.ref||"");
 }
 
 /* ---------- sync engine ---------- */
@@ -583,9 +584,29 @@ async function doUnlock(){
   try{PRIV=await decryptPriv(CORE.lock,p);}
   catch(e){toast("Wrong passphrase");return;}
   $("unlockPass").value="";
+  await ensureRefs();render();
   renderOrgPanel();toast("Organizer unlocked");
 }
 function doLock(){PRIV=null;renderOrgPanel();showPanel("scan");toast("Organizer locked");}
+
+/* ---------- entry code: 6-char PNR-style (no O/0, I/1/L — never misread) ---------- */
+const REF_ALPHABET="ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // 31 chars → 31^6 ≈ 887M combos
+function genRef(){
+  let r;
+  do{
+    const a=new Uint8Array(6);crypto.getRandomValues(a);
+    r=[...a].map(b=>REF_ALPHABET[b%REF_ALPHABET.length]).join("");
+  }while((CORE&&CORE.guests||[]).some(g=>g.ref===r));
+  return r;
+}
+async function ensureRefs(){
+  if(!PRIV||!CORE)return;
+  let changed=false;
+  (CORE.guests||[]).forEach(g=>{
+    if(!g.ref||/^\d+$/.test(g.ref)){g.ref=genRef();changed=true;} // also upgrade old numeric codes
+  });
+  if(changed)await persistCore();
+}
 
 /* ---------- guests ---------- */
 async function addGuest(){
@@ -594,7 +615,7 @@ async function addGuest(){
   const party=Math.max(1,parseInt($("gParty").value||"1",10));
   if(!name){toast("Enter a guest name");return;}
   const id=randHex(10);
-  const g={id,name,party,sig:await signGuest(id,name)};
+  const g={id,name,party,ref:genRef(),sig:await signGuest(id,name)};
   CORE.guests.unshift(g);
   await persistCore();
   $("gName").value="";$("gParty").value="1";
@@ -625,7 +646,7 @@ function render(){
     return `<div class="guest">
       <div class="avatar" style="background:${AV_COLORS[i%AV_COLORS.length]}">${escapeHtml(g.name[0].toUpperCase())}</div>
       <div class="info"><b>${escapeHtml(g.name)}</b>
-        <small>${g.party} seat${g.party>1?"s":""}${c&&c.at?" · in at "+fmtTime(c.at)+(c.by?" ("+escapeHtml(c.by)+")":""):""}</small>
+        <small>${g.party} seat${g.party>1?"s":""} · code ${g.ref||"—"}${c&&c.at?" · in at "+fmtTime(c.at)+(c.by?" ("+escapeHtml(c.by)+")":""):""}</small>
       </div>
       <span class="pill ${c?"in":"out"}">${c?"In":"Invited"}</span>
       <div class="guest-actions">
@@ -635,20 +656,32 @@ function render(){
     </div>`;}).join("");
 }
 
-/* ---------- name lookup (usher fallback) ---------- */
+/* ---------- entry-code / name lookup (usher fallback) ---------- */
+function lookupRow(g,canAdmit){
+  const c=checked[g.id];
+  return `<div class="guest">
+    <div class="info"><b>${escapeHtml(g.name)}</b><small>${g.party} seat${g.party>1?"s":""}${PRIV?" · code "+(g.ref||"—"):""}${c?" · already in"+(c.at?" at "+fmtTime(c.at):""):""}</small></div>
+    ${c?'<span class="pill in">In</span>':(canAdmit?'<button class="admit-btn" onclick="manualAdmit(\''+g.id+'\')">Admit</button>':'')}
+  </div>`;
+}
 function lookup(){
-  const q=$("lookupName").value.trim().toLowerCase();
+  const q=$("lookupName").value.trim();
   const out=$("lookupResults");
-  if(q.length<2){out.innerHTML="";return;}
   const guests=(CORE&&CORE.guests)||[];
-  const hits=guests.filter(g=>g.name.toLowerCase().includes(q)).slice(0,6);
+  // entry-code match first (case-insensitive, exact)
+  if(/^[A-Za-z0-9]{5,6}$/.test(q)){
+    const g=guests.find(x=>(x.ref||"").toUpperCase()===q.toUpperCase());
+    if(g){out.innerHTML=lookupRow(g,true);return;}
+    if(q.length===6&&!/^[a-z]+$/i.test(q)){ // looks like a code, not a name
+      out.innerHTML='<div class="hint" style="margin-top:6px">No guest with entry code '+escapeHtml(q.toUpperCase())+'.</div>';
+      return;
+    }
+  }
+  if(q.length<2){out.innerHTML="";return;}
+  const hits=guests.filter(g=>g.name.toLowerCase().includes(q.toLowerCase())).slice(0,6);
   if(!hits.length){out.innerHTML='<div class="hint" style="margin-top:6px">No guest matches “'+escapeHtml(q)+'”.</div>';return;}
-  out.innerHTML=hits.map(g=>{
-    const c=checked[g.id];
-    return `<div class="guest">
-      <div class="info"><b>${escapeHtml(g.name)}</b><small>${g.party} seat${g.party>1?"s":""}${c?" · already in"+(c.at?" at "+fmtTime(c.at):""):""}</small></div>
-      ${c?'<span class="pill in">In</span>':'<button class="admit-btn" onclick="manualAdmit(\''+g.id+'\')">Admit</button>'}
-    </div>`;}).join("");
+  out.innerHTML=hits.map(g=>lookupRow(g,!!PRIV)).join("")
+    +(!PRIV?'<div class="hint" style="margin-top:6px">To admit without a QR scan, ask the guest for the 6-character entry code on their invite and type it above.</div>':"");
 }
 async function manualAdmit(id){
   const g=(CORE&&CORE.guests||[]).find(x=>x.id===id);if(!g)return;
@@ -668,7 +701,7 @@ function openTicket(g){
   $("tSub").textContent=CORE.event.sub;
   $("tName").textContent=g.name;
   $("tMeta").textContent="Admits "+g.party+(g.party>1?" guests":" guest");
-  $("tCode").textContent=rawCode(g);
+  $("tCode").textContent="Entry code · "+(g.ref||"—");
   $("qrBox").innerHTML="";
   new QRCode($("qrBox"),{text:payload(g),width:210,height:210,colorDark:"#2e2440",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
   $("ticketOverlay").classList.add("show");
@@ -690,7 +723,7 @@ function ticketCanvas(g){
   const qs=380;x.drawImage(src,(W-qs)/2,240,qs,qs);
   x.fillStyle="#2e2440";x.font="34px Georgia";x.fillText(g.name,W/2,690);
   x.fillStyle="#6b5f82";x.font="20px sans-serif";x.fillText("Admits "+g.party+(g.party>1?" guests":" guest"),W/2,728);
-  x.font="11px monospace";x.fillStyle="#a79bc4";x.fillText(rawCode(g).slice(0,70),W/2,784);x.fillText(rawCode(g).slice(70),W/2,802);
+  x.font="600 27px monospace";x.fillStyle="#6b5f82";x.fillText("Entry code  "+(g.ref||""),W/2,792);
   x.font="13px sans-serif";x.fillStyle="#b7aed0";x.fillText("Please present this code at the entrance · non-transferable",W/2,838);
   return c;
 }
@@ -719,7 +752,7 @@ function printAll(){
     const d=document.createElement("div");d.className="p-ticket";
     d.innerHTML='<h3>'+escapeHtml(CORE.event.title)+'</h3><div class="sub">'+escapeHtml(CORE.event.sub)+'</div><div class="qr"></div>'
       +'<div class="nm">'+escapeHtml(g.name)+'</div><div class="mt">Admits '+g.party+(g.party>1?' guests':' guest')+'</div>'
-      +'<div class="cd">'+rawCode(g)+'</div>';
+      +'<div class="cd">Entry code · '+(g.ref||"—")+'</div>';
     grid.appendChild(d);
     new QRCode(d.querySelector(".qr"),{text:payload(g),width:150,height:150,colorDark:"#2e2440",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
   });
@@ -843,10 +876,12 @@ function tryGuestView(){
   const name=p[3]?safeDecode(p[3]):"";
   const title=p[4]?safeDecode(p[4]):DEFAULT_EVENT.title;
   const sub=p[5]?safeDecode(p[5]):DEFAULT_EVENT.sub;
+  const ref=p[6]||"";
   document.body.classList.add("guest");
   $("gvTitle").innerHTML=escapeHtml(title).replace("&amp;","<em>&amp;</em>");
   $("gvSub").textContent=sub;
   $("gvDear").textContent=name?("Dear "+name+","):"";
+  $("gvRef").textContent=ref?("Entry code · "+ref):"";
   new QRCode($("gvQr"),{text:code,width:220,height:220,colorDark:"#2e2440",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
   document.title=title+" — Invitation";
   return true;
