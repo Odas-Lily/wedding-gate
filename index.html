@@ -127,6 +127,16 @@
   .lookup{margin-top:20px}
   .admit-btn{background:var(--ok-bg);color:var(--ok);font-size:12px;padding:8px 13px}
 
+  /* live dashboard */
+  .live-hero{background:linear-gradient(150deg,#fff 0%,var(--lavender-mist) 100%);border:1px solid #e6dff3;border-radius:var(--radius);padding:20px 18px;text-align:center}
+  .live-num b{font-family:Georgia,serif;font-size:52px;color:var(--lavender-deep);line-height:1}
+  .live-num span{font-size:14px;color:var(--ink-soft)}
+  .live-num span b{font-size:15px;font-family:inherit;color:var(--ink)}
+  .live-bar{height:10px;background:#e7e0f3;border-radius:99px;margin:16px 6px 10px;overflow:hidden}
+  .live-bar div{height:100%;width:0%;background:linear-gradient(90deg,var(--lavender),var(--lavender-deep));border-radius:99px;transition:width .6s ease}
+  .live-sub{font-size:13px;color:var(--ink-soft);margin-top:4px}
+  .feed-time{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--lavender-deep);flex-shrink:0}
+
   /* full-screen scan verdict */
   #verdict{
     position:fixed;inset:0;z-index:70;display:none;
@@ -241,6 +251,19 @@
     <p class="cam-note" id="modeNote"></p>
   </section>
 
+  <!-- ============ LIVE DASHBOARD ============ -->
+  <section class="panel" id="panel-live">
+    <h2 class="section">Live arrivals</h2>
+    <div class="live-hero">
+      <div class="live-num"><b id="liveIn">0</b><span> of <b id="liveTotal">0</b> invites arrived</span></div>
+      <div class="live-bar"><div id="liveBarFill"></div></div>
+      <div class="live-sub" id="liveSeats">0 of 0 seats filled</div>
+      <div class="live-sub" id="liveRate"></div>
+    </div>
+    <h2 class="section" style="margin-top:20px">Just walked in</h2>
+    <div id="liveFeed"><div class="empty"><div class="big">🥂</div>Waiting for the first arrival…</div></div>
+  </section>
+
   <!-- ============ ORGANIZER (locked) ============ -->
   <section class="panel" id="panel-org">
     <div id="orgWait" style="display:none"><div class="lock"><div class="big">⏳</div><p>Connecting to the event…</p></div></div>
@@ -272,6 +295,21 @@
       </div>
       <button class="btn-primary" onclick="addGuest()">Add guest &amp; generate code</button>
       <div class="list-tools">
+        <button class="btn-quiet" onclick="toggleBulk()">⬆ Bulk import (CSV)</button>
+        <button class="btn-quiet" onclick="exportCodesCSV()">⬇ Export codes CSV</button>
+      </div>
+      <div id="bulkBox" style="display:none">
+        <div class="field">
+          <label for="csvText">One guest per line: Name, seats (seats optional). Paste from Excel/Sheets — commas or semicolons both work.</label>
+          <textarea id="csvText" rows="6" placeholder="Ngozi Adeyemi, 2&#10;Chidi Okafor; 4&#10;Amara Eze" style="width:100%;padding:13px 14px;font-size:15px;border:1.5px solid #ddd4ee;border-radius:12px;background:#fff;color:var(--ink);outline:none;font-family:inherit;resize:vertical"></textarea>
+        </div>
+        <div class="row">
+          <button class="btn-quiet" onclick="document.getElementById('csvFile').click()">Load .csv file</button>
+          <input type="file" id="csvFile" accept=".csv,text/csv,.txt" style="display:none" onchange="csvFromFile(this)">
+          <button class="btn-primary grow" onclick="bulkImport()">Import guests</button>
+        </div>
+      </div>
+      <div class="list-tools">
         <button class="btn-quiet" onclick="printAll()">🖨 Print all invites</button>
         <button class="btn-quiet" onclick="exportData()">Export backup</button>
       </div>
@@ -297,6 +335,7 @@
 
 <nav aria-label="Sections">
   <button class="active" id="tab-scan" onclick="showPanel('scan')"><span class="ico">📷</span>Scan</button>
+  <button id="tab-live" onclick="showPanel('live')"><span class="ico">📊</span>Live</button>
   <button id="tab-org" onclick="showPanel('org')"><span class="ico">🔐</span>Organizer</button>
 </nav>
 
@@ -640,6 +679,39 @@ async function removeGuest(id){
   CORE.guests=CORE.guests.filter(x=>x.id!==id);
   await persistCore();render();
 }
+/* ---------- live dashboard ---------- */
+function renderLive(){
+  const guests=(CORE&&CORE.guests)||[];
+  const inGuests=guests.filter(g=>checked[g.id]);
+  const totalSeats=guests.reduce((s,g)=>s+g.party,0);
+  const inSeats=inGuests.reduce((s,g)=>s+g.party,0);
+  $("liveIn").textContent=inGuests.length;
+  $("liveTotal").textContent=guests.length;
+  $("liveBarFill").style.width=(guests.length?Math.round(inGuests.length/guests.length*100):0)+"%";
+  $("liveSeats").textContent=inSeats+" of "+totalSeats+" seats filled";
+  const cutoff=Date.now()-10*60*1000;
+  const recent=inGuests.filter(g=>{const c=checked[g.id];return c&&c.at&&new Date(c.at).getTime()>cutoff;}).length;
+  $("liveRate").textContent=recent?("▲ "+recent+" arrived in the last 10 minutes"):"";
+  const feed=$("liveFeed");
+  const arrivals=inGuests
+    .map(g=>({g,c:checked[g.id]}))
+    .filter(x=>x.c&&x.c.at)
+    .sort((a,b)=>new Date(b.c.at)-new Date(a.c.at))
+    .slice(0,30);
+  if(!arrivals.length){
+    feed.innerHTML='<div class="empty"><div class="big">🥂</div>Waiting for the first arrival…</div>';
+    return;
+  }
+  feed.innerHTML=arrivals.map(({g,c},i)=>`
+    <div class="guest">
+      <div class="avatar" style="background:${AV_COLORS[i%AV_COLORS.length]}">${escapeHtml(g.name[0].toUpperCase())}</div>
+      <div class="info"><b>${escapeHtml(g.name)}</b>
+        <small>party of ${g.party}${c.by?" · "+escapeHtml(c.by):""}</small>
+      </div>
+      <span class="feed-time">${fmtTime(c.at)}</span>
+    </div>`).join("");
+}
+
 function render(){
   const ev=(CORE&&CORE.event)||DEFAULT_EVENT;
   const guests=(CORE&&CORE.guests)||[];
@@ -648,9 +720,10 @@ function render(){
   $("statGuests").textContent=guests.length;
   $("statSeats").textContent=guests.reduce((s,g)=>s+g.party,0);
   $("statIn").textContent=guests.filter(g=>checked[g.id]).length;
-  const list=$("guestList");if(!list)return;
+  const list=$("guestList");if(!list){renderLive();return;}
   if(!guests.length){
     list.innerHTML='<div class="empty"><div class="big">💌</div>No invites yet.<br>Add your first guest above to create their unique QR code.</div>';
+    renderLive();
     return;
   }
   list.innerHTML=guests.map((g,i)=>{
@@ -667,6 +740,7 @@ function render(){
         <button class="icon-btn" title="Remove" aria-label="Remove ${escapeHtml(g.name)}" onclick="removeGuest('${g.id}')">✕</button>
       </div>
     </div>`;}).join("");
+  renderLive();
 }
 
 /* ---------- entry-code / name lookup (usher fallback) ---------- */
@@ -704,6 +778,64 @@ async function manualAdmit(id){
   checked[g.id]=rec;localSeen[g.id]=rec;
   render();lookup();
   showVerdict("ok","GOOD TO GO",g.name,"Party of "+g.party+" · checked in manually "+fmtTime(rec.at),true);
+}
+
+/* ---------- bulk CSV import / codes export ---------- */
+function toggleBulk(){const b=$("bulkBox");b.style.display=b.style.display==="none"?"block":"none";}
+function splitLine(line,sep){
+  const out=[];let cur="",q=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'){q=!q;continue;}
+    if(ch===sep&&!q){out.push(cur);cur="";continue;}
+    cur+=ch;
+  }
+  out.push(cur);return out;
+}
+function parseCSV(text){
+  const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(!lines.length)return[];
+  const semis=(text.match(/;/g)||[]).length,commas=(text.match(/,/g)||[]).length;
+  const sep=text.includes("\t")?"\t":(semis>commas?";":",");
+  let rows=lines.map(l=>splitLine(l,sep));
+  if(rows.length&&/^(name|guest)/i.test((rows[0][0]||"").trim()))rows.shift(); // header row
+  return rows
+    .map(r=>({name:(r[0]||"").trim(),party:Math.min(20,Math.max(1,parseInt((r[1]||"1").trim(),10)||1))}))
+    .filter(g=>g.name);
+}
+async function csvFromFile(input){
+  const f=input.files&&input.files[0];if(!f)return;
+  $("csvText").value=await f.text();
+  input.value="";
+  toast("File loaded — review, then tap Import guests");
+}
+async function bulkImport(){
+  if(!PRIV)return;
+  const rows=parseCSV($("csvText").value);
+  if(!rows.length){toast("No valid rows found — format is: Name, seats");return;}
+  const existing=new Set((CORE.guests||[]).map(g=>g.name.toLowerCase()));
+  const dupes=rows.filter(r=>existing.has(r.name.toLowerCase())).length;
+  if(!confirm("Import "+rows.length+" guests"+(dupes?"?\n\nNote: "+dupes+" name(s) already exist on the list and will be added as separate invites — check for accidental doubles afterwards.":"?")))return;
+  toast("Generating "+rows.length+" signed invites…");
+  for(const r of rows){
+    const id=randHex(10);
+    CORE.guests.unshift({id,name:r.name,party:r.party,ref:genRef(),sig:await signGuest(id,r.name)});
+  }
+  await persistCore();
+  $("csvText").value="";$("bulkBox").style.display="none";
+  render();
+  toast(rows.length+" guests imported ✓ — total "+CORE.guests.length);
+}
+function exportCodesCSV(){
+  if(!PRIV)return;
+  if(!(CORE.guests||[]).length){toast("No guests yet");return;}
+  const lines=["name;seats;entry_code;invite_link"];
+  CORE.guests.forEach(g=>lines.push('"'+g.name.replace(/"/g,"'")+'";'+g.party+";"+(g.ref||"")+";"+payload(g)));
+  const a=document.createElement("a");
+  a.download="wedding-invite-codes.csv";
+  a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(lines.join("\n"));
+  a.click();
+  toast("Codes CSV saved — one row per guest");
 }
 
 /* ---------- ticket / share / print ---------- */

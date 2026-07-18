@@ -2,7 +2,7 @@
    Caches the page + libraries so the app opens instantly on the
    wedding day even if venue internet is down. Firebase realtime
    traffic is never intercepted. Bump CACHE to force an update. */
-const CACHE = "gate-v1";
+const CACHE = "gate-v2";
 const SHELL = [
   "./",
   "./index.html",
