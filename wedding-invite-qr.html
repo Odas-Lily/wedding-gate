@@ -6,6 +6,9 @@
 <title>Invite Gate — Wedding QR Check-in</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<!-- Firebase (official CDN). If these fail to load, the app falls back to per-device storage. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <style>
   :root{
     --ink:#2e2440; --ink-soft:#6b5f82;
@@ -83,11 +86,7 @@
   .list-tools{display:flex;gap:8px;margin:14px 0 10px}
   .list-tools button{flex:1;font-size:13px;padding:10px 8px}
 
-  /* lock screen */
-  .lock{
-    text-align:center;padding:36px 20px;background:var(--card);
-    border:1px solid #eae4f5;border-radius:var(--radius);
-  }
+  .lock{text-align:center;padding:36px 20px;background:var(--card);border:1px solid #eae4f5;border-radius:var(--radius)}
   .lock .big{font-size:32px;margin-bottom:10px}
   .lock p{font-size:13px;color:var(--ink-soft);line-height:1.6;margin-bottom:16px}
   .lock input{text-align:center;margin-bottom:10px}
@@ -113,22 +112,29 @@
 
   #reader{border-radius:var(--radius);overflow:hidden;background:#161221;min-height:60px}
   #reader video{border-radius:var(--radius)}
-  .scan-result{border-radius:var(--radius);padding:22px 16px;text-align:center;margin-top:12px;display:none}
-  .scan-result.show{display:block}
-  .scan-result .verdict{font-size:24px;font-weight:800;letter-spacing:.5px}
-  .scan-result .who{font-family:Georgia,serif;font-size:20px;margin-top:6px}
-  .scan-result .detail{font-size:13px;margin-top:6px;opacity:.85;line-height:1.5}
-  .scan-result.ok{background:var(--ok-bg);color:var(--ok)}
-  .scan-result.dup{background:var(--warn-bg);color:var(--warn)}
-  .scan-result.bad{background:var(--bad-bg);color:var(--bad)}
   .scan-tools{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
   .scan-tools button{flex:1;min-width:130px}
   .cam-note{font-size:12px;color:var(--ink-soft);margin-top:10px;line-height:1.5;text-align:center}
   .pending-badge{display:none;margin-top:10px;text-align:center;font-size:12.5px;background:var(--warn-bg);color:var(--warn);padding:9px 12px;border-radius:12px}
   .pending-badge.show{display:block}
   .lookup{margin-top:20px}
-  #lookupResults .guest{padding:10px 12px}
   .admit-btn{background:var(--ok-bg);color:var(--ok);font-size:12px;padding:8px 13px}
+
+  /* full-screen scan verdict */
+  #verdict{
+    position:fixed;inset:0;z-index:70;display:none;
+    flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:32px 24px;color:#fff;
+  }
+  #verdict.show{display:flex}
+  #verdict.ok{background:linear-gradient(160deg,#2f7d4d,#3e8e5a)}
+  #verdict.dup{background:linear-gradient(160deg,#a06f14,#b3801f)}
+  #verdict.bad{background:linear-gradient(160deg,#9c2f3d,#b23a48)}
+  #verdict .v-icon{font-size:84px;line-height:1}
+  #verdict .v-verdict{font-size:30px;font-weight:800;letter-spacing:1px;margin-top:18px}
+  #verdict .v-who{font-family:Georgia,serif;font-size:27px;margin-top:12px}
+  #verdict .v-detail{font-size:15px;margin-top:10px;opacity:.92;line-height:1.55;max-width:320px}
+  #verdict .v-next{margin-top:34px;background:rgba(255,255,255,.18);color:#fff;border:1.5px solid rgba(255,255,255,.55);padding:15px 34px;font-size:16px;border-radius:99px}
 
   nav{
     position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;
@@ -139,10 +145,9 @@
   nav button .ico{font-size:20px}
   nav button.active{color:var(--lavender-deep)}
 
-  .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:13.5px;padding:10px 18px;border-radius:99px;z-index:60;opacity:0;transition:opacity .25s;pointer-events:none;max-width:90%;text-align:center}
+  .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:13.5px;padding:10px 18px;border-radius:99px;z-index:80;opacity:0;transition:opacity .25s;pointer-events:none;max-width:90%;text-align:center}
   .toast.show{opacity:1}
 
-  /* guest invite view */
   body.guest header,body.guest main,body.guest nav{display:none}
   #guestView{display:none}
   body.guest #guestView{
@@ -160,7 +165,6 @@
   #guestView .gv-instr{font-size:12.5px;color:var(--ink-soft);margin-top:12px;line-height:1.55;max-width:280px}
   #guestView .gv-foot{font-size:11px;color:#a79bc4;margin-top:22px;letter-spacing:.5px}
 
-  /* print sheet */
   #printArea{display:none}
   @media print{
     body>*{display:none!important}
@@ -187,7 +191,7 @@
       <div class="event-sub" id="eventSub">December 2026 · Abuja · Strictly by invitation</div>
     </div>
     <div class="badges">
-      <span class="net on" id="netBadge">Synced</span>
+      <span class="net off" id="netBadge">Connecting…</span>
       <span class="role usher" id="roleBadge">Scanner</span>
     </div>
   </div>
@@ -199,7 +203,7 @@
 </header>
 
 <main>
-  <!-- ============ SCANNER (default screen — no unlock needed) ============ -->
+  <!-- ============ SCANNER (default — no unlock needed) ============ -->
   <section class="panel active" id="panel-scan">
     <h2 class="section">Door check-in</h2>
     <div id="reader" aria-label="QR camera view"></div>
@@ -208,7 +212,6 @@
       <button class="btn-quiet" onclick="document.getElementById('qrFile').click()">Scan from photo</button>
       <input type="file" id="qrFile" accept="image/*" style="display:none" onchange="scanFromFile(this)">
     </div>
-    <div class="scan-result" id="scanResult" role="status" aria-live="polite"></div>
     <div class="pending-badge" id="pendingBadge"></div>
 
     <div class="lookup">
@@ -226,12 +229,12 @@
         <button class="btn-quiet" onclick="saveDevice()">Save</button>
       </div>
     </div>
-    <p class="cam-note">Camera blocked in this preview? Use “Scan from photo”, or open the downloaded file in Chrome/Safari on the phone.</p>
+    <p class="cam-note" id="modeNote"></p>
   </section>
 
   <!-- ============ ORGANIZER (locked) ============ -->
   <section class="panel" id="panel-org">
-    <!-- setup: first ever run -->
+    <div id="orgWait" style="display:none"><div class="lock"><div class="big">⏳</div><p>Connecting to the event…</p></div></div>
     <div id="orgSetup" style="display:none">
       <div class="lock">
         <div class="big">🔐</div>
@@ -241,7 +244,6 @@
         <button class="btn-primary" onclick="doSetup()">Create organizer keys</button>
       </div>
     </div>
-    <!-- locked: usher / not yet unlocked -->
     <div id="orgLocked" style="display:none">
       <div class="lock">
         <div class="big">🔒</div>
@@ -250,7 +252,6 @@
         <button class="btn-primary" onclick="doUnlock()">Unlock</button>
       </div>
     </div>
-    <!-- unlocked organizer tools -->
     <div id="orgTools" style="display:none">
       <h2 class="section">Guest list</h2>
       <div class="field">
@@ -262,23 +263,20 @@
       </div>
       <button class="btn-primary" onclick="addGuest()">Add guest &amp; generate code</button>
       <div class="list-tools">
-        <button class="btn-quiet" onclick="refreshAll(true)">↻ Refresh sync</button>
         <button class="btn-quiet" onclick="printAll()">🖨 Print all invites</button>
+        <button class="btn-quiet" onclick="exportData()">Export backup</button>
       </div>
       <div id="guestList"></div>
 
       <h2 class="section" style="margin-top:26px">Event details</h2>
       <div class="field"><label for="sTitle">Couple / event name</label><input type="text" id="sTitle"></div>
       <div class="field"><label for="sSub">Subtitle (date · venue)</label><input type="text" id="sSub"></div>
-      <div class="field"><label for="sUrl">Invite page link (optional)</label><input type="text" id="sUrl" placeholder="https://yourname.github.io/invite.html" inputmode="url"></div>
-      <p class="hint">Host this same file anywhere public and paste its link here — new QR codes then open a personal invite page when guests scan with their own camera. Door phones verify them exactly the same.</p>
+      <div class="field"><label for="sUrl">Invite page link (this site's address)</label><input type="text" id="sUrl" placeholder="https://odas-lily.github.io/wedding-gate/" inputmode="url"></div>
+      <p class="hint">With this set, guests who scan their code with their own camera see a personal invitation page. Door phones verify the same code the same way.</p>
       <button class="btn-primary" onclick="saveSettings()">Save details</button>
 
-      <h2 class="section" style="margin-top:26px">Data</h2>
-      <div class="row">
-        <button class="btn-quiet grow" onclick="exportData()">Export backup</button>
-        <button class="btn-danger grow" onclick="resetCheckins()">Reset check-ins</button>
-      </div>
+      <h2 class="section" style="margin-top:26px">Danger zone</h2>
+      <button class="btn-danger" style="width:100%" onclick="resetCheckins()">Reset all check-ins (every phone)</button>
       <div style="text-align:center;margin-top:14px"><button class="btn-ghost" onclick="doLock()">🔒 Lock organizer area</button></div>
     </div>
   </section>
@@ -288,6 +286,15 @@
   <button class="active" id="tab-scan" onclick="showPanel('scan')"><span class="ico">📷</span>Scan</button>
   <button id="tab-org" onclick="showPanel('org')"><span class="ico">🔐</span>Organizer</button>
 </nav>
+
+<!-- full-screen scan verdict -->
+<div id="verdict" role="alertdialog" aria-live="assertive" onclick="dismissVerdict()">
+  <div class="v-icon" id="vIcon"></div>
+  <div class="v-verdict" id="vVerdict"></div>
+  <div class="v-who" id="vWho"></div>
+  <div class="v-detail" id="vDetail"></div>
+  <button class="v-next" onclick="dismissVerdict()">Scan next guest</button>
+</div>
 
 <!-- QR ticket sheet -->
 <div class="overlay" id="ticketOverlay" onclick="if(event.target===this)closeTicket()">
@@ -329,64 +336,84 @@
 
 <script>
 /* =====================================================================
-   Invite Gate v3 — privilege-separated wedding QR system
+   Invite Gate v4 — Firebase realtime sync + Eventbrite-style scan flow
    ---------------------------------------------------------------------
-   ROLES
-   - Scanner (default, no credentials): verify codes, check guests in.
-   - Organizer (passphrase): create/edit invites, event settings, data.
-   CRYPTO (why ushers can verify but never generate)
-   - Codes are ECDSA P-256 signatures:  sig = Sign(privKey, id|name)
-   - The PUBLIC key (verify-only) syncs to every phone.
-   - The PRIVATE key is stored AES-GCM-encrypted under a key derived
-     from the organizer passphrase (PBKDF2, 200k iters). Without the
-     passphrase it is mathematically unusable — a scanner phone holds
-     nothing that can mint a valid code.
-   SYNC (the "Eurostar server")
-   - Shared cloud keys: "wedqr3:core" (event, guests, pubkey, encrypted
-     privkey) and "checkin:<id>" (one key per guest → no write races
-     between door phones). Local cache per phone for offline; check-ins
-     queue offline and auto-flush.
-   QR payload: WP2|<id>|<base64url ECDSA signature>  (optionally wrapped
-   in the invite-page URL after "#").
+   ▼▼▼ PASTE YOUR FIREBASE CONFIG BETWEEN THE MARKERS ▼▼▼
+   Get it from: console.firebase.google.com → your project →
+   Project settings → Your apps → SDK setup and configuration → Config
 ===================================================================== */
-const CORE_KEY="wedqr3:core", CACHE_KEY="wedqr3:cache", DEV_KEY="wedqr3:device";
-let CORE=null;   // {event:{title,sub}, baseUrl, pub, lock:{salt,iv,ct}, guests:[{id,name,party,sig}]}
-let PRIV=null;   // decrypted private key JWK — memory only, organizer session only
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCuqreMpjzy84az9g--ltTHeT7_4kTSW08",
+  authDomain: "wedding-gate.firebaseapp.com",
+  databaseURL: "https://wedding-gate-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "wedding-gate",
+  storageBucket: "wedding-gate.firebasestorage.app",
+  messagingSenderId: "505421978932",
+  appId: "1:505421978932:web:1d78157e6f83d5438f1961"
+};
+/* Example of what it should look like when filled in:
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSy....",
+  authDomain: "wedding-gate.firebaseapp.com",
+  databaseURL: "https://wedding-gate-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "wedding-gate",
+  storageBucket: "wedding-gate.appspot.com",
+  messagingSenderId: "1234567890",
+  appId: "1:1234567890:web:abc123"
+};
+   ▲▲▲ END CONFIG ▲▲▲
+=====================================================================
+   ARCHITECTURE
+   - Realtime DB paths:  gate/core (event, guests, pubkey, encrypted
+     privkey)  ·  gate/checkins/<guestId> = {at, by}
+   - Every phone subscribes live → refreshes, check-ins, and guest
+     edits appear on all devices within ~1s. State survives refreshes
+     because the server is the source of truth (localStorage is only
+     a warm-start cache).
+   - Duplicate prevention is ATOMIC: check-ins are written with a
+     Firebase transaction — if two phones scan the same code in the
+     same instant, exactly one wins; the other sees ALREADY USED.
+   - Privilege separation unchanged: ECDSA P-256. Public key verifies
+     (all phones); private key signs, stored AES-GCM-encrypted under
+     the organizer passphrase (PBKDF2 200k). Ushers cannot mint codes.
+   - No Firebase config / no network → graceful per-device fallback.
+===================================================================== */
+let MODE="local";           // firebase | claude | local
+let fdb=null, coreLoaded=false;
+let CORE=null;              // {event,baseUrl,pub,lock,guests[]}
+let PRIV=null;              // decrypted signing key — memory only
 let checked={}, localSeen={}, pendingWrites=[];
 let device={label:""};
-let online=true, currentTicket=null, scanner=null, camOn=false, lastScanAt=0;
+let online=false, currentTicket=null, scanner=null, camOn=false;
+let lastCode="", lastCodeAt=0;
 
 const DEFAULT_EVENT={title:"Codas & Obinna",sub:"December 2026 · Abuja · Strictly by invitation"};
 const $=id=>document.getElementById(id);
 const AV_COLORS=["#7c6aae","#b98bb0","#d99e9b","#e0ab86","#8f7fc0","#c295a4"];
 const enc=s=>new TextEncoder().encode(s);
 
-/* ---------- encoding helpers ---------- */
+/* ---------- encoding ---------- */
 function b64u(a){let s="";a.forEach(b=>s+=String.fromCharCode(b));return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");}
 function fromB64u(s){s=s.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";const b=atob(s),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a;}
 function randHex(n){const a=new Uint8Array(n/2);crypto.getRandomValues(a);return[...a].map(b=>b.toString(16).padStart(2,"0")).join("");}
 
-/* ---------- asymmetric signing ---------- */
+/* ---------- ECDSA ---------- */
 function guestMsg(id,name){return id+"|"+name.trim().toLowerCase();}
-async function importPriv(jwk){return crypto.subtle.importKey("jwk",jwk,{name:"ECDSA",namedCurve:"P-256"},false,["sign"]);}
-async function importPub(jwk){return crypto.subtle.importKey("jwk",jwk,{name:"ECDSA",namedCurve:"P-256"},false,["verify"]);}
 async function signGuest(id,name){
-  const k=await importPriv(PRIV);
-  const sig=await crypto.subtle.sign({name:"ECDSA",hash:"SHA-256"},k,enc(guestMsg(id,name)));
-  return b64u(new Uint8Array(sig));
+  const k=await crypto.subtle.importKey("jwk",PRIV,{name:"ECDSA",namedCurve:"P-256"},false,["sign"]);
+  return b64u(new Uint8Array(await crypto.subtle.sign({name:"ECDSA",hash:"SHA-256"},k,enc(guestMsg(id,name)))));
 }
 async function verifyGuestSig(g,sigB64){
   try{
-    const k=await importPub(CORE.pub);
+    const k=await crypto.subtle.importKey("jwk",CORE.pub,{name:"ECDSA",namedCurve:"P-256"},false,["verify"]);
     return await crypto.subtle.verify({name:"ECDSA",hash:"SHA-256"},k,fromB64u(sigB64),enc(guestMsg(g.id,g.name)));
   }catch(e){return false;}
 }
 
-/* ---------- passphrase → AES key (protects the private key) ---------- */
+/* ---------- passphrase-protected private key ---------- */
 async function deriveAes(pass,saltB64){
   const km=await crypto.subtle.importKey("raw",enc(pass),"PBKDF2",false,["deriveKey"]);
-  return crypto.subtle.deriveKey({name:"PBKDF2",salt:fromB64u(saltB64),iterations:200000,hash:"SHA-256"},
-    km,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt:fromB64u(saltB64),iterations:200000,hash:"SHA-256"},km,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
 }
 async function encryptPriv(privJwk,pass){
   const salt=b64u(crypto.getRandomValues(new Uint8Array(16)));
@@ -409,74 +436,132 @@ function payload(g){
   return u.replace(/#.*$/,"")+"#"+rawCode(g)+"|"+encodeURIComponent(g.name)+"|"+encodeURIComponent(CORE.event.title)+"|"+encodeURIComponent(CORE.event.sub);
 }
 
-/* ---------- storage ---------- */
-async function sGet(k,shared){try{const r=await window.storage.get(k,shared);setNet(true);return r?r.value:null;}catch(e){if(/not found|404|exist/i.test(String(e))){setNet(true);return null;}setNet(false);return null;}}
-async function sSet(k,v,shared){try{await window.storage.set(k,v,shared);setNet(true);return true;}catch(e){setNet(false);return false;}}
-async function sList(prefix,shared){try{const r=await window.storage.list(prefix,shared);setNet(true);return r&&r.keys?r.keys:[];}catch(e){setNet(false);return null;}}
-function setNet(on){
-  online=on;const b=$("netBadge");
-  b.className="net "+(on?"on":"off");b.textContent=on?"Synced":"Offline";
-  updatePendingBadge();
-}
+/* ---------- sync engine ---------- */
+function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 
-/* ---------- boot ---------- */
-async function boot(){
-  const d=await sGet(DEV_KEY,false);if(d){try{device=JSON.parse(d);$("sDevice").value=device.label||"";}catch(e){}}
-  let raw=await sGet(CORE_KEY,true);
-  if(!raw)raw=await sGet(CACHE_KEY,false);
-  if(raw){try{CORE=JSON.parse(raw);}catch(e){CORE=null;}}
-  await refreshCheckins();
+function initSync(){
+  // warm-start from cache immediately
+  const cached=lsGet("gate:core");
+  if(cached){try{CORE=JSON.parse(cached);}catch(e){}}
+  const dev=lsGet("gate:device");
+  if(dev){try{device=JSON.parse(dev);}catch(e){}}
+  $("sDevice").value=device.label||"";
+
+  if(FIREBASE_CONFIG&&typeof firebase!=="undefined"&&firebase.initializeApp){
+    try{
+      firebase.initializeApp(FIREBASE_CONFIG);
+      fdb=firebase.database();
+      MODE="firebase";
+      fdb.ref(".info/connected").on("value",s=>{setNet(!!s.val());if(s.val())flushPending();});
+      fdb.ref("gate/core").on("value",snap=>{
+        coreLoaded=true;
+        const raw=snap.val();
+        if(raw){try{CORE=JSON.parse(raw);lsSet("gate:core",raw);}catch(e){}}
+        render();renderOrgPanel();
+      },err=>{coreLoaded=true;render();renderOrgPanel();toast("Database error: "+String(err&&err.code||err));});
+      fdb.ref("gate/checkins").on("value",snap=>{
+        checked=snap.val()||{};
+        Object.keys(localSeen).forEach(id=>{if(!checked[id])checked[id]=localSeen[id];});
+        render();
+      });
+      $("modeNote").textContent="Live sync on — check-ins appear on every door phone instantly.";
+      setTimeout(()=>{if(!coreLoaded){coreLoaded=true;renderOrgPanel();}},5000);
+      return;
+    }catch(e){/* fall through */}
+  }
+  MODE=(typeof window!=="undefined"&&window.storage)?"claude":"local";
+  coreLoaded=true;
+  if(MODE==="claude")claudeBoot();
+  else{
+    const chk=lsGet("gate:checkins");
+    if(chk){try{checked=JSON.parse(chk);}catch(e){}}
+    setNet(true);
+  }
+  $("modeNote").textContent=MODE==="claude"
+    ?"Running inside Claude — data syncs through Claude storage."
+    :"⚠ No live sync configured — data stays on this phone only. Add the Firebase config to enable multi-phone sync.";
   render();renderOrgPanel();
-  setInterval(async()=>{await flushPending();await refreshCheckins();render();},12000);
+}
+async function claudeBoot(){
+  try{
+    const r=await window.storage.get("wedqr4:core",true);
+    if(r&&r.value){CORE=JSON.parse(r.value);lsSet("gate:core",r.value);}
+    const c=await window.storage.list("checkin:",true);
+    if(c&&c.keys)c.keys.forEach(k=>{checked[k.slice(8)]=checked[k.slice(8)]||{at:null,by:""};});
+    setNet(true);
+  }catch(e){setNet(false);}
+  render();renderOrgPanel();
+  setInterval(async()=>{try{
+    const c=await window.storage.list("checkin:",true);
+    if(c&&c.keys){const f={};c.keys.forEach(k=>{f[k.slice(8)]=checked[k.slice(8)]||{at:null,by:""};});checked=f;
+      Object.keys(localSeen).forEach(id=>{if(!checked[id])checked[id]=localSeen[id];});render();}
+    setNet(true);
+  }catch(e){setNet(false);}},12000);
 }
 async function persistCore(){
   const raw=JSON.stringify(CORE);
-  const ok=await sSet(CORE_KEY,raw,true);
-  await sSet(CACHE_KEY,raw,false);
-  if(!ok)toast("Saved locally — will sync when back online");
+  lsSet("gate:core",raw);
+  if(MODE==="firebase"){
+    try{await fdb.ref("gate/core").set(raw);}catch(e){toast("Saved on this phone — will sync when online");}
+  }else if(MODE==="claude"){
+    try{await window.storage.set("wedqr4:core",raw,true);}catch(e){}
+  }
 }
-async function refreshCheckins(){
-  const keys=await sList("checkin:",true);
-  if(keys===null)return;
-  const fresh={};
-  keys.forEach(k=>{const id=k.slice(8);fresh[id]=checked[id]||{at:null,by:""};});
-  checked=fresh;
-  Object.keys(localSeen).forEach(id=>{if(!checked[id])checked[id]=localSeen[id];});
-}
-async function refreshAll(manual){
-  const raw=await sGet(CORE_KEY,true);
-  if(raw){try{CORE=JSON.parse(raw);await sSet(CACHE_KEY,raw,false);}catch(e){}}
-  await refreshCheckins();render();renderOrgPanel();
-  if(manual)toast(online?"Guest list synced":"Offline — showing last known data");
-}
+function persistCheckinsLocal(){if(MODE==="local")lsSet("gate:checkins",JSON.stringify(checked));}
 
-/* ---------- offline queue ---------- */
+/* write a check-in; atomic in firebase mode. returns {committed, existing} */
+async function writeCheckin(id,rec){
+  if(MODE==="firebase"&&online){
+    try{
+      const res=await fdb.ref("gate/checkins/"+id).transaction(cur=>cur===null?rec:undefined);
+      return{committed:res.committed,existing:res.committed?null:(res.snapshot?res.snapshot.val():null)};
+    }catch(e){/* fall to queue */}
+  }
+  if(checked[id])return{committed:false,existing:checked[id]};
+  checked[id]=rec;localSeen[id]=rec;persistCheckinsLocal();
+  if(MODE==="firebase"){pendingWrites.push({id,rec});updatePendingBadge();}
+  else if(MODE==="claude"){
+    try{await window.storage.set("checkin:"+id,JSON.stringify(rec),true);}
+    catch(e){pendingWrites.push({id,rec});updatePendingBadge();}
+  }
+  return{committed:true,existing:null};
+}
 async function flushPending(){
   if(!pendingWrites.length)return;
   const still=[];
   for(const w of pendingWrites){
-    const ok=await sSet("checkin:"+w.id,JSON.stringify(w.rec),true);
-    if(!ok)still.push(w);
+    try{
+      if(MODE==="firebase")await fdb.ref("gate/checkins/"+w.id).transaction(cur=>cur===null?w.rec:undefined);
+      else if(MODE==="claude")await window.storage.set("checkin:"+w.id,JSON.stringify(w.rec),true);
+    }catch(e){still.push(w);}
   }
   pendingWrites=still;updatePendingBadge();
-  if(!still.length&&online)toast("All offline check-ins synced ✓");
+  if(!still.length)toast("All offline check-ins synced ✓");
 }
 function updatePendingBadge(){
   const b=$("pendingBadge");
   if(pendingWrites.length){b.classList.add("show");b.textContent="⏳ "+pendingWrites.length+" check-in"+(pendingWrites.length>1?"s":"")+" waiting to sync — sends automatically";}
   else b.classList.remove("show");
 }
+function setNet(on){
+  online=on;const b=$("netBadge");
+  b.className="net "+(on?"on":"off");
+  b.textContent=MODE==="firebase"?(on?"Live":"Offline"):(MODE==="claude"?(on?"Synced":"Offline"):"This device");
+}
 
 /* ---------- organizer setup / unlock ---------- */
 function renderOrgPanel(){
-  const setup=!CORE||!CORE.pub;
+  const wait=!coreLoaded;
+  const setup=coreLoaded&&(!CORE||!CORE.pub);
+  $("orgWait").style.display=wait?"block":"none";
   $("orgSetup").style.display=setup?"block":"none";
-  $("orgLocked").style.display=(!setup&&!PRIV)?"block":"none";
-  $("orgTools").style.display=(!setup&&PRIV)?"block":"none";
+  $("orgLocked").style.display=(coreLoaded&&!setup&&!PRIV)?"block":"none";
+  $("orgTools").style.display=(coreLoaded&&!setup&&PRIV)?"block":"none";
   const r=$("roleBadge");
   r.className="role "+(PRIV?"org":"usher");
   r.textContent=PRIV?"Organizer":"Scanner";
-  if(PRIV){$("sTitle").value=CORE.event.title;$("sSub").value=CORE.event.sub;$("sUrl").value=CORE.baseUrl||"";}
+  if(PRIV&&CORE){$("sTitle").value=CORE.event.title;$("sSub").value=CORE.event.sub;$("sUrl").value=CORE.baseUrl||"";}
 }
 async function doSetup(){
   const p1=$("setupPass").value,p2=$("setupPass2").value;
@@ -502,7 +587,7 @@ async function doUnlock(){
 }
 function doLock(){PRIV=null;renderOrgPanel();showPanel("scan");toast("Organizer locked");}
 
-/* ---------- guests (organizer only — guarded by PRIV) ---------- */
+/* ---------- guests ---------- */
 async function addGuest(){
   if(!PRIV)return;
   const name=$("gName").value.trim();
@@ -550,7 +635,7 @@ function render(){
     </div>`;}).join("");
 }
 
-/* ---------- name lookup (scanner fallback) ---------- */
+/* ---------- name lookup (usher fallback) ---------- */
 function lookup(){
   const q=$("lookupName").value.trim().toLowerCase();
   const out=$("lookupResults");
@@ -567,16 +652,15 @@ function lookup(){
 }
 async function manualAdmit(id){
   const g=(CORE&&CORE.guests||[]).find(x=>x.id===id);if(!g)return;
-  if(checked[g.id]){toast(g.name+" is already checked in");lookup();return;}
   const rec={at:new Date().toISOString(),by:(device.label||"door phone")+" · manual"};
+  const res=await writeCheckin(g.id,rec);
+  if(!res.committed){showVerdict("dup","ALREADY USED",g.name,dupDetail(res.existing));lookup();return;}
   checked[g.id]=rec;localSeen[g.id]=rec;
-  const ok=await sSet("checkin:"+g.id,JSON.stringify(rec),true);
-  if(!ok){pendingWrites.push({id:g.id,rec});updatePendingBadge();}
   render();lookup();
-  toast("✓ "+g.name+" checked in (manual)");
+  showVerdict("ok","GOOD TO GO",g.name,"Party of "+g.party+" · checked in manually "+fmtTime(rec.at),true);
 }
 
-/* ---------- ticket ---------- */
+/* ---------- ticket / share / print ---------- */
 function openTicketById(id){const g=CORE.guests.find(x=>x.id===id);if(g)openTicket(g);}
 function openTicket(g){
   currentTicket=g;
@@ -590,7 +674,6 @@ function openTicket(g){
   $("ticketOverlay").classList.add("show");
 }
 function closeTicket(){$("ticketOverlay").classList.remove("show");}
-
 function ticketCanvas(g){
   const src=$("qrBox").querySelector("canvas")||$("qrBox").querySelector("img");
   const W=640,H=880,c=document.createElement("canvas");c.width=W;c.height=H;
@@ -629,8 +712,6 @@ async function shareTicket(){
     }else{downloadTicket();toast("Sharing not supported here — PNG saved instead");}
   }catch(e){/* cancelled */}
 }
-
-/* ---------- print all ---------- */
 function printAll(){
   if(!CORE.guests.length){toast("No guests to print yet");return;}
   const grid=$("printGrid");grid.innerHTML="";
@@ -645,43 +726,61 @@ function printAll(){
   setTimeout(()=>window.print(),300);
 }
 
-/* ---------- verification (scanner — public key only) ---------- */
+/* ---------- full-screen verdict ---------- */
+let verdictTimer=null;
+function showVerdict(cls,verdict,who,detail,autoDismiss){
+  pauseScan();
+  const v=$("verdict");
+  v.className="show "+cls;
+  $("vIcon").textContent=cls==="ok"?"✓":(cls==="dup"?"⚠":"✕");
+  $("vVerdict").textContent=verdict;
+  $("vWho").textContent=who||"";
+  $("vDetail").textContent=detail||"";
+  if(navigator.vibrate)navigator.vibrate(cls==="ok"?[70]:[90,60,90]);
+  clearTimeout(verdictTimer);
+  if(autoDismiss)verdictTimer=setTimeout(dismissVerdict,2600);
+}
+function dismissVerdict(){
+  clearTimeout(verdictTimer);
+  $("verdict").className="";
+  resumeScan();
+}
+function pauseScan(){try{if(camOn&&scanner)scanner.pause(true);}catch(e){}}
+function resumeScan(){try{if(camOn&&scanner)scanner.resume();}catch(e){}}
+function dupDetail(existing){
+  let d="This code was already used";
+  if(existing&&existing.at)d+=" at "+fmtTime(existing.at);
+  if(existing&&existing.by)d+=" · scanned by "+existing.by;
+  return d+". Possible screenshot re-use — check ID before admitting.";
+}
+
+/* ---------- verification ---------- */
 async function verify(text){
-  const now=Date.now();
-  if(now-lastScanAt<1600)return;
-  lastScanAt=now;
-  const box=$("scanResult");
-  const show=(cls,verdict,who,detail)=>{
-    box.className="scan-result show "+cls;
-    box.innerHTML='<div class="verdict">'+verdict+'</div>'+(who?'<div class="who">'+escapeHtml(who)+'</div>':"")+(detail?'<div class="detail">'+detail+'</div>':"");
-    if(navigator.vibrate)navigator.vibrate(cls==="ok"?[60]:[80,60,80]);
-  };
   const rawText=(text||"").trim();
+  const now=Date.now();
+  if(rawText===lastCode&&now-lastCodeAt<5000)return;  // same code lingering in frame
+  lastCode=rawText;lastCodeAt=now;
+
   const idx=rawText.indexOf("WP2|");
   const parts=(idx>=0?rawText.slice(idx):rawText).split("|");
-  if(parts.length<3||parts[0]!=="WP2"){show("bad","✕ NOT VALID","","This is not an invite code for this event.");return;}
-  if(!CORE||!CORE.guests||!CORE.guests.length)await refreshAll(false);
-  if(!CORE||!CORE.pub){show("bad","✕ NOT SET UP","","This phone hasn't synced the event yet — connect to the internet once and try again.");return;}
-  const g=CORE.guests.find(x=>x.id===parts[1]);
-  if(!g){show("bad","✕ NOT VALID","","No matching invite — possibly revoked, or the guest list hasn't synced (go online once, then rescan).");return;}
+  if(parts.length<3||parts[0]!=="WP2"){showVerdict("bad","INVALID CODE","","This is not an invite code for this event.");return;}
+  if(!CORE||!CORE.pub){showVerdict("bad","NOT SET UP","","This phone hasn't loaded the event yet — check the connection and the Firebase config.");return;}
+  const g=(CORE.guests||[]).find(x=>x.id===parts[1]);
+  if(!g){showVerdict("bad","INVALID CODE","","No matching invite — it may have been revoked.");return;}
   const sigOk=await verifyGuestSig(g,parts[2]);
-  if(!sigOk||g.sig!==parts[2]){show("bad","✕ FORGED",g.name,"Signature check failed — do not admit.");return;}
+  if(!sigOk||g.sig!==parts[2]){showVerdict("bad","INVALID CODE",g.name,"Signature check failed — do not admit.");return;}
 
-  let dup=checked[g.id]||localSeen[g.id]||null;
-  if(!dup){
-    const liveRaw=await sGet("checkin:"+g.id,true);
-    if(liveRaw){try{dup=JSON.parse(liveRaw);}catch(e){dup={at:null,by:""};}}
-  }
-  if(dup){
-    show("dup","⚠ ALREADY USED",g.name,"Checked in"+(dup.at?" at "+fmtTime(dup.at):"")+(dup.by?" · "+escapeHtml(dup.by):"")+". Possible screenshot re-use — check ID before admitting.");
-    return;
-  }
+  // fast local duplicate view (live-synced in firebase mode)
+  const known=checked[g.id]||localSeen[g.id];
+  if(known){showVerdict("dup","ALREADY USED",g.name,dupDetail(known));return;}
+
+  // atomic claim
   const rec={at:new Date().toISOString(),by:device.label||"door phone"};
+  const res=await writeCheckin(g.id,rec);
+  if(!res.committed){showVerdict("dup","ALREADY USED",g.name,dupDetail(res.existing));return;}
   checked[g.id]=rec;localSeen[g.id]=rec;
-  const okWrite=await sSet("checkin:"+g.id,JSON.stringify(rec),true);
-  if(!okWrite){pendingWrites.push({id:g.id,rec});updatePendingBadge();}
   render();
-  show("ok","✓ WELCOME",g.name,"Party of "+g.party+" · "+fmtTime(rec.at)+(okWrite?"":" · offline — will sync"));
+  showVerdict("ok","GOOD TO GO",g.name,"Party of "+g.party+" · "+fmtTime(rec.at)+(MODE==="firebase"&&!online?" · offline — will sync":""),true);
 }
 
 /* ---------- camera / photo ---------- */
@@ -691,20 +790,17 @@ async function toggleCamera(){
     scanner=scanner||new Html5Qrcode("reader");
     await scanner.start({facingMode:"environment"},{fps:10,qrbox:{width:230,height:230}},t=>verify(t),()=>{});
     camOn=true;$("camBtn").textContent="Stop camera";
-  }catch(e){toast("Camera unavailable here — use 'Scan from photo', or open the downloaded file in the phone's browser.");}
+  }catch(e){toast("Camera unavailable here — use 'Scan from photo', or open the site in Chrome/Safari.");}
 }
 async function stopCamera(){try{await scanner.stop();}catch(e){}camOn=false;$("camBtn").textContent="Start camera";}
 async function scanFromFile(input){
   const f=input.files&&input.files[0];if(!f)return;
   try{scanner=scanner||new Html5Qrcode("reader");verify(await scanner.scanFile(f,false));}
-  catch(e){
-    $("scanResult").className="scan-result show bad";
-    $("scanResult").innerHTML='<div class="verdict">✕ No QR found</div><div class="detail">Try a sharper, well-lit photo of the code.</div>';
-  }
+  catch(e){showVerdict("bad","NO QR FOUND","","Try a sharper, well-lit photo of the code.");}
   input.value="";
 }
 
-/* ---------- settings / data (organizer) ---------- */
+/* ---------- settings / data ---------- */
 async function saveSettings(){
   if(!PRIV)return;
   CORE.event.title=$("sTitle").value.trim()||CORE.event.title;
@@ -712,9 +808,9 @@ async function saveSettings(){
   CORE.baseUrl=$("sUrl").value.trim();
   await persistCore();render();toast("Event details saved");
 }
-async function saveDevice(){
+function saveDevice(){
   device.label=$("sDevice").value.trim();
-  await sSet(DEV_KEY,JSON.stringify(device),false);
+  lsSet("gate:device",JSON.stringify(device));
   toast(device.label?("This phone is now “"+device.label+"”"):"Device name cleared");
 }
 function exportData(){
@@ -728,14 +824,15 @@ function exportData(){
 async function resetCheckins(){
   if(!PRIV)return;
   if(!confirm("Clear ALL check-in marks on every phone? (Guest list and codes stay.)"))return;
-  const keys=await sList("checkin:",true);
-  if(keys===null){toast("Can't reset while offline");return;}
-  for(const k of keys){try{await window.storage.delete(k,true);}catch(e){}}
-  checked={};localSeen={};pendingWrites=[];updatePendingBadge();render();
-  toast("Check-ins reset everywhere");
+  checked={};localSeen={};pendingWrites=[];updatePendingBadge();
+  if(MODE==="firebase"){try{await fdb.ref("gate/checkins").remove();}catch(e){toast("Couldn't reach the database");return;}}
+  else if(MODE==="claude"){
+    try{const c=await window.storage.list("checkin:",true);if(c&&c.keys)for(const k of c.keys)await window.storage.delete(k,true);}catch(e){}
+  }else persistCheckinsLocal();
+  render();toast("Check-ins reset everywhere");
 }
 
-/* ---------- guest invite view (opened via QR link) ---------- */
+/* ---------- guest invite view ---------- */
 function tryGuestView(){
   const h=(location.hash||"").replace(/^#/,"");
   const idx=h.indexOf("WP2|");
@@ -775,7 +872,7 @@ document.addEventListener("keydown",e=>{
   else if(a==="unlockPass")doUnlock();
   else if(a==="setupPass2")doSetup();
 });
-if(!tryGuestView())boot();
+if(!tryGuestView())initSync();
 </script>
 </body>
 </html>
