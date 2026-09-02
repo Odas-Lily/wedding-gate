@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Invite Gate — Wedding QR Check-in</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#7c6aae">
+<meta name="theme-color" content="#4A188C">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -18,13 +18,14 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
 <style>
   :root{
-    --ink:#2e2440; --ink-soft:#6b5f82;
-    --lavender:#7c6aae; --lavender-deep:#5d4b91; --lavender-mist:#ece7f6;
-    --blush:#e8afc0; --peach:#f0b995;
-    --ground:#f6f3fa; --card:#ffffff;
-    --ok:#3e8e5a; --ok-bg:#e4f3ea;
-    --warn:#b3801f; --warn-bg:#faf0d8;
-    --bad:#b23a48; --bad-bg:#f9e4e7;
+    --ink:#2A1145; --ink-soft:#6B5A80;
+    --purple:#4A188C; --purple-deep:#35116A; --purple-mist:#EDE7F7;
+    --gold:#C1993A; --gold-soft:#DFC58C; --gold-mist:#F7F0DF;
+    --green:#2A634C; --green-mist:#E4EEE9;
+    --ground:#F8F6FC; --card:#ffffff;
+    --ok:#2A634C; --ok-bg:#E4EEE9;
+    --warn:#A87B1E; --warn-bg:#F8EFD9;
+    --bad:#9E2F3E; --bad-bg:#F7E3E6;
     --radius:16px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
@@ -36,22 +37,22 @@
   }
   header{
     padding:16px 18px 12px;
-    background:linear-gradient(160deg,var(--lavender-mist) 0%,#fdf6f0 100%);
+    background:linear-gradient(160deg,var(--purple-mist) 0%,#FBF6EC 100%);
     border-bottom:1px solid #e5def2;
   }
   .head-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
   .monogram h1{font-family:Georgia,serif;font-weight:400;font-size:24px;letter-spacing:.5px}
-  .monogram h1 em{font-style:italic;color:var(--lavender-deep)}
+  .monogram h1 em{font-style:italic;color:var(--purple-deep)}
   .event-sub{font-size:12px;color:var(--ink-soft);margin-top:2px;letter-spacing:.3px}
   .badges{display:flex;flex-direction:column;gap:4px;align-items:flex-end}
   .net,.role{font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:4px 10px;border-radius:99px;white-space:nowrap}
   .net.on{background:var(--ok-bg);color:var(--ok)}
   .net.off{background:var(--warn-bg);color:var(--warn)}
   .role.usher{background:#f1edf9;color:var(--ink-soft)}
-  .role.org{background:var(--lavender-mist);color:var(--lavender-deep)}
+  .role.org{background:var(--purple-mist);color:var(--purple-deep)}
   .stats{display:flex;gap:8px;margin-top:11px}
   .stat{flex:1;background:rgba(255,255,255,.75);border:1px solid #e8e1f4;border-radius:12px;padding:7px 8px;text-align:center}
-  .stat b{display:block;font-size:18px;font-family:Georgia,serif;color:var(--lavender-deep)}
+  .stat b{display:block;font-size:18px;font-family:Georgia,serif;color:var(--purple-deep)}
   .stat span{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--ink-soft)}
 
   main{flex:1;overflow-y:auto;padding:16px 16px 92px}
@@ -66,15 +67,15 @@
     width:100%;padding:13px 14px;font-size:16px;border:1.5px solid #ddd4ee;
     border-radius:12px;background:#fff;color:var(--ink);outline:none;
   }
-  input:focus{border-color:var(--lavender)}
+  input:focus{border-color:var(--purple)}
   .row{display:flex;gap:8px}
   .row .grow{flex:1}
   .row .narrow{width:100px}
   button{font-size:15px;font-weight:600;border:none;border-radius:12px;padding:13px 18px;cursor:pointer;transition:transform .06s}
   button:active{transform:scale(.97)}
-  button:focus-visible{outline:3px solid var(--blush);outline-offset:2px}
-  .btn-primary{background:var(--lavender);color:#fff;width:100%}
-  .btn-quiet{background:var(--lavender-mist);color:var(--lavender-deep)}
+  button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+  .btn-primary{background:var(--purple);color:#fff;width:100%}
+  .btn-quiet{background:var(--purple-mist);color:var(--purple-deep)}
   .btn-danger{background:var(--bad-bg);color:var(--bad)}
   .btn-ghost{background:transparent;color:var(--ink-soft);font-weight:500;font-size:13px;padding:8px 10px}
 
@@ -87,7 +88,7 @@
   .pill.in{background:var(--ok-bg);color:var(--ok)}
   .pill.out{background:#f1edf9;color:var(--ink-soft)}
   .guest-actions{display:flex;flex-shrink:0}
-  .icon-btn{background:none;border:none;padding:8px 7px;font-size:17px;cursor:pointer;color:var(--lavender-deep)}
+  .icon-btn{background:none;border:none;padding:8px 7px;font-size:17px;cursor:pointer;color:var(--purple-deep)}
   .empty{text-align:center;padding:42px 20px;color:var(--ink-soft);font-size:14px;line-height:1.6}
   .empty .big{font-size:34px;margin-bottom:8px}
   .list-tools{display:flex;gap:8px;margin:14px 0 10px}
@@ -98,15 +99,15 @@
   .lock p{font-size:13px;color:var(--ink-soft);line-height:1.6;margin-bottom:16px}
   .lock input{text-align:center;margin-bottom:10px}
 
-  .overlay{position:fixed;inset:0;background:rgba(46,36,64,.55);z-index:40;display:none;align-items:flex-end;justify-content:center}
+  .overlay{position:fixed;inset:0;background:rgba(42,17,69,.55);z-index:40;display:none;align-items:flex-end;justify-content:center}
   .overlay.show{display:flex}
   .sheet{background:var(--ground);width:100%;max-width:520px;border-radius:22px 22px 0 0;padding:18px 18px 26px;max-height:88dvh;overflow-y:auto}
   .sheet-handle{width:42px;height:4px;border-radius:4px;background:#cfc6e3;margin:0 auto 14px}
-  .ticket{background:#fff;border-radius:18px;overflow:hidden;border:1px solid #e6dff3;box-shadow:0 8px 30px rgba(93,75,145,.14)}
-  .ticket-top{background:linear-gradient(135deg,var(--lavender) 0%,var(--lavender-deep) 60%,#7d5a8f 100%);color:#fff;text-align:center;padding:17px 16px 13px}
+  .ticket{background:#fff;border-radius:18px;overflow:hidden;border:1px solid #e6dff3;box-shadow:0 8px 30px rgba(74,24,140,.16)}
+  .ticket-top{background:linear-gradient(135deg,var(--purple) 0%,var(--purple-deep) 60%,#2A0B55 100%);color:#fff;text-align:center;padding:17px 16px 13px}
   .ticket-top .serif{font-family:Georgia,serif;font-size:20px}
   .ticket-top small{display:block;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;opacity:.85;margin-top:4px}
-  .ticket-perf{height:0;border-top:2px dashed #ddd4ee;position:relative}
+  .ticket-perf{height:0;border-top:2px dashed var(--gold-soft);position:relative}
   .ticket-perf::before,.ticket-perf::after{content:"";position:absolute;top:-9px;width:18px;height:18px;border-radius:50%;background:var(--ground)}
   .ticket-perf::before{left:-10px}.ticket-perf::after{right:-10px}
   .ticket-body{padding:18px 16px;text-align:center}
@@ -128,14 +129,14 @@
   .admit-btn{background:var(--ok-bg);color:var(--ok);font-size:12px;padding:8px 13px}
 
   /* live dashboard */
-  .live-hero{background:linear-gradient(150deg,#fff 0%,var(--lavender-mist) 100%);border:1px solid #e6dff3;border-radius:var(--radius);padding:20px 18px;text-align:center}
-  .live-num b{font-family:Georgia,serif;font-size:52px;color:var(--lavender-deep);line-height:1}
+  .live-hero{background:linear-gradient(150deg,#fff 0%,var(--purple-mist) 100%);border:1px solid #e6dff3;border-radius:var(--radius);padding:20px 18px;text-align:center}
+  .live-num b{font-family:Georgia,serif;font-size:52px;color:var(--purple-deep);line-height:1}
   .live-num span{font-size:14px;color:var(--ink-soft)}
   .live-num span b{font-size:15px;font-family:inherit;color:var(--ink)}
   .live-bar{height:10px;background:#e7e0f3;border-radius:99px;margin:16px 6px 10px;overflow:hidden}
-  .live-bar div{height:100%;width:0%;background:linear-gradient(90deg,var(--lavender),var(--lavender-deep));border-radius:99px;transition:width .6s ease}
+  .live-bar div{height:100%;width:0%;background:linear-gradient(90deg,var(--purple),var(--gold));border-radius:99px;transition:width .6s ease}
   .live-sub{font-size:13px;color:var(--ink-soft);margin-top:4px}
-  .feed-time{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--lavender-deep);flex-shrink:0}
+  .feed-time{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--purple-deep);flex-shrink:0}
 
   /* full-screen scan verdict */
   #verdict{
@@ -144,9 +145,9 @@
     text-align:center;padding:32px 24px;color:#fff;
   }
   #verdict.show{display:flex}
-  #verdict.ok{background:linear-gradient(160deg,#2f7d4d,#3e8e5a)}
-  #verdict.dup{background:linear-gradient(160deg,#a06f14,#b3801f)}
-  #verdict.bad{background:linear-gradient(160deg,#9c2f3d,#b23a48)}
+  #verdict.ok{background:linear-gradient(160deg,#1F4D3A,#2A634C)}
+  #verdict.dup{background:linear-gradient(160deg,#8F6A18,#A87B1E)}
+  #verdict.bad{background:linear-gradient(160deg,#8C2937,#9E2F3E)}
   #verdict .v-icon{font-size:84px;line-height:1}
   #verdict .v-verdict{font-size:30px;font-weight:800;letter-spacing:1px;margin-top:18px}
   #verdict .v-who{font-family:Georgia,serif;font-size:27px;margin-top:12px}
@@ -160,7 +161,7 @@
   }
   nav button{flex:1;background:none;border-radius:0;padding:10px 0 12px;font-size:11px;font-weight:600;color:var(--ink-soft);display:flex;flex-direction:column;gap:3px;align-items:center}
   nav button .ico{font-size:20px}
-  nav button.active{color:var(--lavender-deep)}
+  nav button.active{color:var(--purple-deep)}
 
   .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:13.5px;padding:10px 18px;border-radius:99px;z-index:80;opacity:0;transition:opacity .25s;pointer-events:none;max-width:90%;text-align:center}
   .toast.show{opacity:1}
@@ -170,18 +171,18 @@
   body.guest #guestView{
     display:flex;flex-direction:column;align-items:center;justify-content:center;
     min-height:100dvh;padding:24px 20px;text-align:center;
-    background:linear-gradient(170deg,#ece7f6 0%,#fdf3ec 55%,#fbe9ee 100%);
+    background:linear-gradient(170deg,#EDE7F7 0%,#FBF6EE 55%,#F6EEE0 100%);
   }
-  #guestView .gv-eyebrow{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--lavender-deep);margin-bottom:10px}
+  #guestView .gv-eyebrow{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--purple-deep);margin-bottom:10px}
   #guestView h1{font-family:Georgia,serif;font-weight:400;font-size:34px;line-height:1.2}
-  #guestView h1 em{font-style:italic;color:var(--lavender-deep)}
+  #guestView h1 em{font-style:italic;color:var(--purple-deep)}
   #guestView .gv-sub{font-size:13px;letter-spacing:1px;color:var(--ink-soft);margin-top:8px;text-transform:uppercase}
   #guestView .gv-dear{font-family:Georgia,serif;font-style:italic;font-size:19px;margin-top:26px}
-  #guestView .gv-card{background:#fff;border-radius:18px;padding:20px 22px 16px;margin-top:16px;box-shadow:0 10px 34px rgba(93,75,145,.16);border:1px solid #e6dff3}
+  #guestView .gv-card{background:#fff;border-radius:18px;padding:20px 22px 16px;margin-top:16px;box-shadow:0 10px 34px rgba(74,24,140,.18);border:1px solid #e6dff3}
   #guestView .gv-qr{display:flex;justify-content:center}
   #guestView .gv-ref{font-family:ui-monospace,Menlo,monospace;font-size:15px;font-weight:600;letter-spacing:3px;color:var(--ink-soft);margin-top:12px}
   #guestView .gv-instr{font-size:12.5px;color:var(--ink-soft);margin-top:12px;line-height:1.55;max-width:280px}
-  #guestView .gv-foot{font-size:11px;color:#a79bc4;margin-top:22px;letter-spacing:.5px}
+  #guestView .gv-foot{font-size:11px;color:#9E93B8;margin-top:22px;letter-spacing:.5px}
 
   #printArea{display:none}
   @media print{
@@ -189,13 +190,13 @@
     body{background:#fff;max-width:none}
     #printArea{display:block!important;padding:0}
     .p-grid{display:grid;grid-template-columns:1fr 1fr;gap:6mm}
-    .p-ticket{border:1px solid #cbc2e0;border-radius:4mm;padding:5mm;text-align:center;page-break-inside:avoid}
-    .p-ticket h3{font-family:Georgia,serif;font-weight:400;font-size:13pt;color:#5d4b91}
-    .p-ticket .sub{font-size:8pt;letter-spacing:1px;text-transform:uppercase;color:#6b5f82;margin:1mm 0 3mm}
+    .p-ticket{border:1px solid #C9BCE0;border-radius:4mm;padding:5mm;text-align:center;page-break-inside:avoid}
+    .p-ticket h3{font-family:Georgia,serif;font-weight:400;font-size:13pt;color:#4A188C}
+    .p-ticket .sub{font-size:8pt;letter-spacing:1px;text-transform:uppercase;color:#6B5A80;margin:1mm 0 3mm}
     .p-ticket .nm{font-family:Georgia,serif;font-size:12pt;margin-top:3mm}
-    .p-ticket .mt{font-size:8.5pt;color:#6b5f82}
+    .p-ticket .mt{font-size:8.5pt;color:#6B5A80}
     .p-ticket .qr{display:flex;justify-content:center}
-    .p-ticket .cd{font-family:monospace;font-size:9.5pt;font-weight:600;letter-spacing:2px;color:#6b5f82;margin-top:2mm}
+    .p-ticket .cd{font-family:monospace;font-size:9.5pt;font-weight:600;letter-spacing:2px;color:#6B5A80;margin-top:2mm}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -441,7 +442,7 @@ let lastCode="", lastCodeAt=0;
 
 const DEFAULT_EVENT={title:"Codas & Obinna",sub:"December 2026 · Abuja · Strictly by invitation"};
 const $=id=>document.getElementById(id);
-const AV_COLORS=["#7c6aae","#b98bb0","#d99e9b","#e0ab86","#8f7fc0","#c295a4"];
+const AV_COLORS=["#4A188C","#2A634C","#C1993A","#6B3FB8","#3F7D63","#8A6A2E"];
 const enc=s=>new TextEncoder().encode(s);
 
 /* ---------- encoding ---------- */
@@ -848,7 +849,7 @@ function openTicket(g){
   $("tMeta").textContent="Admits "+g.party+(g.party>1?" guests":" guest");
   $("tCode").textContent="Entry code · "+(g.ref||"—");
   $("qrBox").innerHTML="";
-  new QRCode($("qrBox"),{text:payload(g),width:210,height:210,colorDark:"#2e2440",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
+  new QRCode($("qrBox"),{text:payload(g),width:210,height:210,colorDark:"#4A188C",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
   $("ticketOverlay").classList.add("show");
 }
 function closeTicket(){$("ticketOverlay").classList.remove("show");}
@@ -858,18 +859,18 @@ function ticketCanvas(g){
   const x=c.getContext("2d");
   x.fillStyle="#fff";x.fillRect(0,0,W,H);
   const grad=x.createLinearGradient(0,0,W,200);
-  grad.addColorStop(0,"#7c6aae");grad.addColorStop(1,"#5d4b91");
+  grad.addColorStop(0,"#4A188C");grad.addColorStop(1,"#35116A");
   x.fillStyle=grad;x.fillRect(0,0,W,190);
   x.fillStyle="#fff";x.textAlign="center";
   x.font="italic 40px Georgia";x.fillText(CORE.event.title,W/2,90);
   x.font="16px Georgia";x.globalAlpha=.9;x.fillText(CORE.event.sub.toUpperCase(),W/2,135);x.globalAlpha=1;
-  x.strokeStyle="#ddd4ee";x.setLineDash([10,8]);x.lineWidth=3;
+  x.strokeStyle="#C1993A";x.setLineDash([10,8]);x.lineWidth=3;
   x.beginPath();x.moveTo(0,190);x.lineTo(W,190);x.stroke();x.setLineDash([]);
   const qs=380;x.drawImage(src,(W-qs)/2,240,qs,qs);
-  x.fillStyle="#2e2440";x.font="34px Georgia";x.fillText(g.name,W/2,690);
-  x.fillStyle="#6b5f82";x.font="20px sans-serif";x.fillText("Admits "+g.party+(g.party>1?" guests":" guest"),W/2,728);
-  x.font="600 27px monospace";x.fillStyle="#6b5f82";x.fillText("Entry code  "+(g.ref||""),W/2,792);
-  x.font="13px sans-serif";x.fillStyle="#b7aed0";x.fillText("Please present this code at the entrance · non-transferable",W/2,838);
+  x.fillStyle="#2A1145";x.font="34px Georgia";x.fillText(g.name,W/2,690);
+  x.fillStyle="#6B5A80";x.font="20px sans-serif";x.fillText("Admits "+g.party+(g.party>1?" guests":" guest"),W/2,728);
+  x.font="600 27px monospace";x.fillStyle="#6B5A80";x.fillText("Entry code  "+(g.ref||""),W/2,792);
+  x.font="13px sans-serif";x.fillStyle="#A99BC0";x.fillText("Please present this code at the entrance · non-transferable",W/2,838);
   return c;
 }
 function downloadTicket(){
@@ -899,7 +900,7 @@ function printAll(){
       +'<div class="nm">'+escapeHtml(g.name)+'</div><div class="mt">Admits '+g.party+(g.party>1?' guests':' guest')+'</div>'
       +'<div class="cd">Entry code · '+(g.ref||"—")+'</div>';
     grid.appendChild(d);
-    new QRCode(d.querySelector(".qr"),{text:payload(g),width:150,height:150,colorDark:"#2e2440",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
+    new QRCode(d.querySelector(".qr"),{text:payload(g),width:150,height:150,colorDark:"#4A188C",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
   });
   setTimeout(()=>window.print(),300);
 }
@@ -1095,7 +1096,7 @@ function tryGuestView(){
   $("gvSub").textContent=sub;
   $("gvDear").textContent=name?("Dear "+name+","):"";
   $("gvRef").textContent=ref?("Entry code · "+ref):"";
-  new QRCode($("gvQr"),{text:code,width:220,height:220,colorDark:"#2e2440",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
+  new QRCode($("gvQr"),{text:code,width:220,height:220,colorDark:"#4A188C",colorLight:"#ffffff",correctLevel:QRCode.CorrectLevel.M});
   document.title=title+" — Invitation";
   return true;
 }
